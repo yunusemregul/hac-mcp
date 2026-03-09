@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>HAC MCP</title>
+<link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+<h1>HAC MCP</h1>
+<p class="subtitle">Environment manager &nbsp;·&nbsp; MCP endpoint: <code id="mcpEndpoint"></code></p>
+
+<div class="layout">
+  <!-- Left: environments + logs -->
+  <div style="display:flex;flex-direction:column;gap:20px">
+    <div class="card">
+      <div class="card-header">
+        <h2>Environments</h2>
+        <button class="btn-primary btn-sm" onclick="openForm()">+ Add</button>
+      </div>
+      <div id="envList"><div class="empty">No environments yet.<br/>Add one using the form →</div></div>
+    </div>
+
+    <!-- MCP log panel -->
+    <div class="card">
+      <div class="card-header">
+        <h2><span class="log-dot" id="logDot"></span>MCP Activity Log</h2>
+        <button class="btn-ghost btn-sm" onclick="clearLog('logList')">Clear</button>
+      </div>
+      <div id="logList" class="log-list"><div class="empty" style="padding:20px">No activity yet.</div></div>
+    </div>
+
+    <!-- HAC request log panel -->
+    <div class="card">
+      <div class="card-header">
+        <h2><span class="log-dot" id="hacLogDot"></span>HAC Request Log</h2>
+        <button class="btn-ghost btn-sm" onclick="clearLog('hacLogList')">Clear</button>
+      </div>
+      <div id="hacLogList" class="hac-log-list"><div class="empty" style="padding:20px">No requests yet.</div></div>
+    </div>
+  </div>
+
+  <!-- Right: add/edit form -->
+  <div class="card" id="formCard" style="display:none">
+    <div class="card-header"><h2 id="formTitle">Add Environment</h2></div>
+    <div class="card-body">
+      <input type="hidden" id="editId"/>
+      <label>Name</label>
+      <input type="text" id="fName" placeholder="Production / Local DEV…"/>
+      <label>Description</label>
+      <input type="text" id="fDesc" placeholder="Optional notes"/>
+      <label>HAC URL</label>
+      <input type="url" id="fUrl" placeholder="https://host:9002 or https://host/hac/"/>
+      <label>Username</label>
+      <input type="text" id="fUser" placeholder="admin"/>
+      <label>Password</label>
+      <input type="password" id="fPass" placeholder="••••••••"/>
+      <label style="margin-top:16px">Access rights</label>
+      <div class="toggle-group">
+        <div class="toggle-item">
+          <span class="toggle-label">FlexibleSearch</span>
+          <label class="toggle"><input type="checkbox" id="fFlex" checked/><span class="slider"></span></label>
+        </div>
+        <div class="toggle-item">
+          <span class="toggle-label">ImpEx Import</span>
+          <label class="toggle"><input type="checkbox" id="fImpex" checked/><span class="slider"></span></label>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn-ghost" onclick="closeForm()">Cancel</button>
+        <button class="btn-primary" onclick="saveEnv()">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

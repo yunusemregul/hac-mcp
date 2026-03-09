@@ -1,0 +1,12 @@
+node_modules/
+.env
+.env.*
+environments.json
+*.log
+npm-debug.log*
+.DS_Store
+dist/
+build/
+coverage/
+.nyc_output/
+.cache/

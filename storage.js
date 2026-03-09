@@ -1,0 +1,44 @@
+import { readFile, writeFile } from 'fs/promises';
+import { existsSync } from 'fs';
+import { randomUUID } from 'crypto';
+
+const FILE = './environments.json';
+
+async function load() {
+  if (!existsSync(FILE)) return [];
+  return JSON.parse(await readFile(FILE, 'utf8'));
+}
+
+async function save(envs) {
+  await writeFile(FILE, JSON.stringify(envs, null, 2));
+}
+
+export async function listEnvironments() {
+  return load();
+}
+
+export async function getEnvironment(id) {
+  return (await load()).find(e => e.id === id) ?? null;
+}
+
+export async function createEnvironment(data) {
+  const envs = await load();
+  const env = { id: randomUUID(), ...data };
+  envs.push(env);
+  await save(envs);
+  return env;
+}
+
+export async function updateEnvironment(id, data) {
+  const envs = await load();
+  const i = envs.findIndex(e => e.id === id);
+  if (i === -1) throw new Error('Environment not found');
+  envs[i] = { ...envs[i], ...data };
+  await save(envs);
+  return envs[i];
+}
+
+export async function deleteEnvironment(id) {
+  const envs = await load();
+  await save(envs.filter(e => e.id !== id));
+}
