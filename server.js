@@ -3,7 +3,7 @@ import { createServer } from 'http';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { z } from 'zod';
-import { login, flexibleSearch, impexImport, SessionExpiredError, setHacLogger } from './hac.js';
+import { login, flexibleSearch, impexImport, pkAnalyze, SessionExpiredError, setHacLogger } from './hac.js';
 import { listEnvironments, getEnvironment, createEnvironment, updateEnvironment, deleteEnvironment } from './storage.js';
 
 const PORT = process.env.PORT || 3333;
@@ -81,6 +81,137 @@ function parseFlexSearchError(msg) {
   return { unknownField, typeName, allFields };
 }
 
+// ─── Auto-resolve scalar fields for inline error enrichment ──────────────────
+async function fetchScalarFields(env, typeCode) {
+  try {
+    const typeResult = await withSession(env, s => flexibleSearch(s,
+      `SELECT {pk} FROM {ComposedType} WHERE {code} = '${typeCode}'`
+    ));
+    const typePK = typeResult.resultList?.[0]?.[0];
+    if (!typePK) return null;
+
+    const attrResult = await withSession(env, s => flexibleSearch(s,
+      `SELECT {qualifier}, {databasecolumn}, {attributetype}, {unique} FROM {AttributeDescriptor} WHERE {enclosingtype} = '${typePK}' ORDER BY {qualifier} ASC`,
+      { maxCount: 300 }
+    ));
+    if (!attrResult.resultList?.length) return null;
+
+    const scalar = attrResult.resultList.filter(([, dbCol]) => dbCol);
+
+    const attrTypePKs = [...new Set(scalar.map(([,, attrTypePK]) => attrTypePK).filter(Boolean))];
+    const refTypes = {};
+    if (attrTypePKs.length) {
+      const conds = attrTypePKs.map(p => `{pk} = '${p}'`).join(' OR ');
+      const r = await withSession(env, s => flexibleSearch(s,
+        `SELECT {pk}, {code} FROM {ComposedType} WHERE ${conds}`
+      ));
+      if (r.resultList) for (const [tpk, tcode] of r.resultList) refTypes[String(tpk)] = tcode;
+    }
+
+    const isTruthy = v => v === true || v === 'true' || v === 1 || v === '1';
+    return scalar.map(([q,, attrTypePK, isUnique]) => {
+      const refType = attrTypePK ? refTypes[String(attrTypePK)] : null;
+      let s = q;
+      if (isTruthy(isUnique)) s += ' [unique]';
+      if (refType) s += ` → ${refType}`;
+      return s;
+    }).join(', ');
+  } catch (_) { return null; }
+}
+
+// ─── ImpEx helpers ────────────────────────────────────────────────────────────
+function parseImpexHeaders(script) {
+  const result = [];
+  for (const line of script.split('\n')) {
+    const m = line.trim().match(/^(INSERT_UPDATE|INSERT|UPDATE|REMOVE)\s+(\w+)/);
+    if (!m) continue;
+    const typeCode = m[2];
+    const rest = line.trim().slice(m[0].length);
+    const semiIdx = rest.indexOf(';');
+    if (semiIdx === -1) continue;
+    const cols = rest.slice(semiIdx + 1).split(';')
+      .map(c => c.trim().match(/^(\w+)/)?.[1]).filter(Boolean);
+    result.push({ typeCode, cols });
+  }
+  return result;
+}
+
+async function validateImpexScript(env, script) {
+  const headers = parseImpexHeaders(script);
+  if (!headers.length) return [];
+  const uniqueTypes = [...new Set(headers.map(h => h.typeCode))];
+
+  // Get type PKs + full inheritance paths so we check parent mandatory fields too
+  const typeChains = {}; // typeCode → [pk, ...ancestorPKs]
+  try {
+    const conds = uniqueTypes.map(t => `{code} = '${t}'`).join(' OR ');
+    const r = await withSession(env, s => flexibleSearch(s,
+      `SELECT {pk}, {code}, {inheritancepathstring} FROM {ComposedType} WHERE ${conds}`
+    ));
+    if (r.resultList) {
+      for (const [pk, code, inheritancePath] of r.resultList) {
+        typeChains[code] = inheritancePath ? inheritancePath.split(',').filter(Boolean) : [String(pk)];
+      }
+    }
+  } catch (_) { return []; }
+
+  const allPKs = [...new Set(Object.values(typeChains).flat())];
+  if (!allPKs.length) return [];
+
+  // Fetch mandatory (optional = 0) attributes for all PKs in the inheritance chains
+  // Using integer 0 — SAP Commerce stores booleans as 0/1 in the DB
+  const mandatoryByTypePK = {}; // typePK → Set<qualifier>
+  const batchSize = 20;
+  for (let i = 0; i < allPKs.length; i += batchSize) {
+    const batch = allPKs.slice(i, i + batchSize);
+    try {
+      const encConds = batch.map(p => `{enclosingtype} = '${p}'`).join(' OR ');
+      const r = await withSession(env, s => flexibleSearch(s,
+        `SELECT {qualifier}, {enclosingtype} FROM {AttributeDescriptor} WHERE (${encConds}) AND {optional} = 0`,
+        { maxCount: 500 }
+      ));
+      if (r.resultList) {
+        for (const [qualifier, encPK] of r.resultList) {
+          const key = String(encPK);
+          if (!mandatoryByTypePK[key]) mandatoryByTypePK[key] = new Set();
+          mandatoryByTypePK[key].add(qualifier);
+        }
+      }
+    } catch (_) {}
+  }
+
+  const warnings = [];
+  for (const { typeCode, cols } of headers) {
+    const chain = typeChains[typeCode];
+    if (!chain) continue;
+    const allMandatory = [...new Set(chain.flatMap(pk => [...(mandatoryByTypePK[pk] || [])]))];
+    const missing = allMandatory.filter(f => !cols.includes(f));
+    if (missing.length) warnings.push(`**${typeCode}**: missing mandatory field(s): ${missing.join(', ')}`);
+  }
+  return warnings;
+}
+
+function formatImpexDetails(details) {
+  if (!details) return null;
+  return details.split('\n').map(line => {
+    const trimmed = line.trim();
+    if (!trimmed) return line;
+    // HAC error lines mixing error message + row data look like:
+    //   ,,,,error message here;data col1;data col2;...
+    // Split on first semicolon when line starts with commas or is clearly error+data
+    const semiIdx = trimmed.indexOf(';');
+    if (semiIdx !== -1 && (trimmed.startsWith(',') || trimmed.length > 200)) {
+      const errorPart = trimmed.slice(0, semiIdx).replace(/^,+/, '').trim();
+      const dataCols = trimmed.slice(semiIdx + 1).split(';');
+      if (errorPart) {
+        return `ERROR: ${errorPart}\n  (row data: ${dataCols.length} column(s) omitted)`;
+      }
+    }
+    if (trimmed.length > 300) return trimmed.slice(0, 300) + `… [truncated]`;
+    return line;
+  }).join('\n');
+}
+
 // ─── MCP server factory ───────────────────────────────────────────────────────
 function createMcpInstance() {
   const mcp = new McpServer({ name: 'hac-mcp', version: '1.0.0' });
@@ -144,8 +275,14 @@ function createMcpInstance() {
 
         const parsed = parseFlexSearchError(causeMsg) || parseFlexSearchError(msg);
         if (parsed) {
-          const { unknownField, typeName, allFields } = parsed;
-          const detail = `Unknown field "{${unknownField}}" on type ${typeName}. Valid fields are: ${allFields.join(', ')}`;
+          const { unknownField, typeName } = parsed;
+          let detail = `Unknown field "{${unknownField}}" on type ${typeName}.`;
+          const scalarFields = await fetchScalarFields(env, typeName);
+          if (scalarFields) {
+            detail += `\n\nValid scalar fields for ${typeName}:\n  ${scalarFields}\n\nFor relation/collection fields use get_type_info.`;
+          } else {
+            detail += `\n\nTip: use get_type_info with typeCode "${typeName}" to see valid fields.`;
+          }
           mcpLog('flexible_search', env.name, `Query error`, detail, true);
           return error(`Query error: ${detail}`);
         }
@@ -275,7 +412,7 @@ function createMcpInstance() {
       for (const typePK of typePKs) {
         try {
           const attrResult = await withSession(env, s => flexibleSearch(s,
-            `SELECT {qualifier}, {databasecolumn}, {enclosingtype}, {attributetype} FROM {AttributeDescriptor} WHERE {enclosingtype} = '${typePK}' ORDER BY {qualifier} ASC`,
+            `SELECT {qualifier}, {databasecolumn}, {enclosingtype}, {attributetype}, {unique} FROM {AttributeDescriptor} WHERE {enclosingtype} = '${typePK}' ORDER BY {qualifier} ASC`,
             { maxCount: 300 }
           ));
           if (attrResult.resultList) {
@@ -337,24 +474,44 @@ function createMcpInstance() {
         const eltPK = elementTypeMap[attrTypePKStr];
         const collCode = collCodeMap?.[attrTypePKStr];
         const targetType = eltPK ? (composedTypeNames[String(eltPK)] || null) : null;
-        // Derive link table name: collCode ends with "${qualifier}Coll", strip that suffix
         const suffix = `${qualifier}Coll`;
         const linkTable = collCode?.endsWith(suffix) ? collCode.slice(0, -suffix.length) : null;
         relationInfo[qualifier] = { targetType, linkTable };
       }
+
+      // 8. Resolve scalar FK reference types via ComposedType
+      // allAttrs row: [qualifier, databasecolumn, enclosingtype, attributetype, unique]
+      const scalarAttrTypePKs = [...new Set(scalar.map(([,,,attrTypePK]) => attrTypePK).filter(Boolean))];
+      const scalarRefTypes = {}; // attrTypePK → typeCode
+      if (scalarAttrTypePKs.length) {
+        try {
+          const conds = scalarAttrTypePKs.map(p => `{pk} = '${p}'`).join(' OR ');
+          const r = await withSession(env, s => flexibleSearch(s,
+            `SELECT {pk}, {code} FROM {ComposedType} WHERE ${conds}`
+          ));
+          if (r.resultList) for (const [tpk, tcode] of r.resultList) scalarRefTypes[String(tpk)] = tcode;
+        } catch (_) {}
+      }
+
+      const isTruthy = v => v === true || v === 'true' || v === 1 || v === '1';
 
       let out = `Type: ${code}`;
       if (supertypeName) out += ` (extends ${supertypeName})`;
       out += '\n\n';
 
       out += `Scalar fields — use directly in SELECT / WHERE / ORDER BY:\n`;
-      if (includeInherited) {
-        out += scalar.map(([q,,encPK]) => `${q}${ancestorNames[String(encPK)] && ancestorNames[String(encPK)] !== code ? ` (from ${ancestorNames[String(encPK)]})` : ''}`).join(', ');
-      } else {
-        out += scalar.map(([q]) => q).join(', ');
+      for (const [q, , encPK, attrTypePK, isUnique] of scalar) {
+        const inherited = includeInherited && ancestorNames[String(encPK)] && ancestorNames[String(encPK)] !== code
+          ? ` (from ${ancestorNames[String(encPK)]})` : '';
+        const refType = attrTypePK ? scalarRefTypes[String(attrTypePK)] : null;
+        let line = `  ${q}`;
+        if (isTruthy(isUnique)) line += ' [unique]';
+        if (refType) line += ` → ${refType}`;
+        if (inherited) line += inherited;
+        out += line + '\n';
       }
 
-      out += '\n\nRelation/collection fields — require JOIN to query:\n';
+      out += '\nRelation/collection fields — require JOIN to query:\n';
       for (const [q,,encPK] of relations) {
         const { targetType, linkTable } = relationInfo[q] || {};
         const inherited = includeInherited && ancestorNames[String(encPK)] && ancestorNames[String(encPK)] !== code ? ` (from ${ancestorNames[String(encPK)]})` : '';
@@ -371,6 +528,80 @@ function createMcpInstance() {
       }
 
       mcpLog('get_type_info', env.name, `Type info: ${code} (${allAttrs.length} attrs)`, out);
+      return text(out);
+    }
+  );
+
+  mcp.registerTool(
+    'resolve_pk',
+    {
+      description: 'Resolve a SAP Commerce PK to its type code and unique field values. Use this when a FlexibleSearch result contains an opaque PK and you need to know what item it refers to.',
+      inputSchema: {
+        environmentId: z.string().describe('Environment ID from list_environments'),
+        pk: z.string().describe('The PK value to resolve'),
+      },
+    },
+    async ({ environmentId, pk }) => {
+      const env = await getEnvironment(environmentId);
+      if (!env) return error(`Environment "${environmentId}" not found.`);
+      if (!env.allowFlexSearch) return error(`FlexibleSearch is disabled for environment "${env.name}".`);
+
+      let analysis;
+      try {
+        analysis = await withSession(env, s => pkAnalyze(s, pk));
+      } catch (e) {
+        mcpLog('resolve_pk', env.name, `Error: ${e.message}`, '', true);
+        return error(`PK analysis failed: ${e.message}`);
+      }
+
+      if (analysis.possibleException) {
+        return error(`Invalid PK ${pk}: ${analysis.possibleException}`);
+      }
+
+      const typeCode = analysis.pkComposedTypeCode;
+      let out = `PK ${pk} → **${typeCode}** (typeCode: ${analysis.pkTypeCode})\nCreated: ${analysis.pkCreationDate}\n`;
+
+      if (typeCode && typeCode !== 'Item') {
+        // Find unique fields for this type
+        let uniqueFields = [];
+        try {
+          const typePKResult = await withSession(env, s => flexibleSearch(s,
+            `SELECT {pk} FROM {ComposedType} WHERE {code} = '${typeCode}'`
+          ));
+          const typePK = typePKResult.resultList?.[0]?.[0];
+          if (typePK) {
+            const attrResult = await withSession(env, s => flexibleSearch(s,
+              `SELECT {qualifier}, {unique} FROM {AttributeDescriptor} WHERE {enclosingtype} = '${typePK}'`,
+              { maxCount: 200 }
+            ));
+            const isTruthy = v => v === true || v === 'true' || v === 1 || v === '1';
+            uniqueFields = (attrResult.resultList || [])
+              .filter(([, isUnique]) => isTruthy(isUnique))
+              .map(([q]) => q);
+          }
+        } catch (_) {}
+
+        // Fetch item with unique fields
+        const fieldsToFetch = uniqueFields.length ? uniqueFields : ['pk'];
+        try {
+          const selectFields = fieldsToFetch.map(f => `{${f}}`).join(', ');
+          const itemResult = await withSession(env, s => flexibleSearch(s,
+            `SELECT ${selectFields} FROM {${typeCode}} WHERE {pk} = '${pk}'`
+          ));
+          if (itemResult.resultList?.[0]) {
+            out += '\nUnique fields:\n';
+            for (const [i, f] of fieldsToFetch.entries()) {
+              out += `  ${f}: ${itemResult.resultList[0][i] ?? 'null'}\n`;
+            }
+          } else {
+            out += '\n(Item not found — may have been deleted)\n';
+          }
+        } catch (e) {
+          out += `\n(Could not fetch item details: ${e.message})\n`;
+        }
+      }
+
+      mcpLog('resolve_pk', env.name, `PK ${pk} → ${typeCode}`, out);
       return text(out);
     }
   );
@@ -401,6 +632,18 @@ function createMcpInstance() {
         return error(`ImpEx import is disabled for environment "${env.name}".`);
       }
 
+      // Pre-validate mandatory fields
+      let validationWarnings = [];
+      try {
+        validationWarnings = await validateImpexScript(env, script);
+      } catch (_) {}
+
+      if (validationWarnings.length) {
+        const warnOut = `**Pre-validation warnings** (import not executed):\n${validationWarnings.map(w => `- ${w}`).join('\n')}\n\nFix the script and retry.`;
+        mcpLog('impex_import', env.name, `Pre-validation failed`, warnOut, true);
+        return error(warnOut);
+      }
+
       let result;
       try {
         result = await withSession(env, s => impexImport(s, script, {
@@ -414,7 +657,7 @@ function createMcpInstance() {
       const isErr = result.level === 'error';
       const icon = isErr ? '❌' : '✅';
       let out = `**${env.name}** — ${icon} ${result.result || 'Import complete'}\n`;
-      if (result.details) out += `\n\`\`\`\n${result.details}\n\`\`\``;
+      if (result.details) out += `\n\`\`\`\n${formatImpexDetails(result.details)}\n\`\`\``;
 
       const scriptPreview = script.split('\n')[0].slice(0, 60);
       mcpLog('impex_import', env.name,

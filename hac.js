@@ -73,6 +73,11 @@ function cookieStr(cookies) {
   return Object.entries(cookies).map(([k, v]) => `${k}=${v}`).join('; ');
 }
 
+function htmlDecode(v) {
+  if (typeof v !== 'string') return v;
+  return v.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#034;/g, '"').replace(/&#39;/g, "'").replace(/&#039;/g, "'");
+}
+
 function opts(session, path, method, extra = {}) {
   return {
     hostname: session.ip,
@@ -169,6 +174,7 @@ export async function flexibleSearch(session, query, {
   }), body);
 
   const result = JSON.parse(res.body);
+  if (result.resultList) result.resultList = result.resultList.map(row => row.map(htmlDecode));
   if (result.exception) {
     log('error', `Query failed: ${result.exception}`);
   } else {
@@ -211,7 +217,7 @@ export async function impexImport(session, scriptContent, {
   const levelM = res.body.match(/id="impexResult"[^>]*data-level="([^"]+)"/);
   const resultM = res.body.match(/id="impexResult"[^>]*data-result="([^"]+)"/);
   const preM = res.body.match(/<pre>([\s\S]*?)<\/pre>/);
-  const decode = s => s?.replace(/&#034;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').trim() ?? null;
+  const decode = s => s != null ? htmlDecode(s).trim() : null;
 
   const result = {
     level: levelM?.[1] ?? null,
@@ -225,4 +231,25 @@ export async function impexImport(session, scriptContent, {
     log('ok', `Import complete: ${result.result || 'done'}`);
   }
   return result;
+}
+
+export async function pkAnalyze(session, pk) {
+  const { ctx, host } = session;
+  log('info', `Fetching PK analyzer page for CSRF token`);
+  const page = await httpRequest(opts(session, ctx + '/platform/pkanalyzer', 'GET'));
+  assertNotLoginPage(page);
+  const csrf = extractCsrf(page.body);
+  if (!csrf) throw new Error('Could not extract CSRF token from pkanalyzer page');
+  log('info', `Analyzing PK: ${pk}`);
+  const body = new URLSearchParams({ pkString: String(pk) }).toString();
+  const res = await httpRequest(opts(session, ctx + '/platform/pkanalyzer/analyze', 'POST', {
+    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+    'Content-Length': Buffer.byteLength(body),
+    'X-CSRF-TOKEN': csrf,
+    'X-Requested-With': 'XMLHttpRequest',
+    Accept: 'application/json',
+    Referer: `https://${host}${ctx}/platform/pkanalyzer`,
+  }), body);
+  assertNotLoginPage(res);
+  return JSON.parse(res.body);
 }
