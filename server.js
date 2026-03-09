@@ -659,6 +659,21 @@ function createMcpInstance() {
       let out = `**${env.name}** — ${icon} ${result.result || 'Import complete'}\n`;
       if (result.details) out += `\n\`\`\`\n${formatImpexDetails(result.details)}\n\`\`\``;
 
+      // On error, extract "unknown attributes [TypeName.field]" patterns and inline valid fields
+      if (isErr && result.details) {
+        const unknownAttrTypes = [...new Set(
+          [...result.details.matchAll(/unknown attributes \[(\w+)\.\w+\]/g)].map(m => m[1])
+        )];
+        if (unknownAttrTypes.length) {
+          const hints = [];
+          for (const typeName of unknownAttrTypes) {
+            const fields = await fetchScalarFields(env, typeName);
+            if (fields) hints.push(`**${typeName}** valid scalar fields:\n  ${fields}`);
+          }
+          if (hints.length) out += `\n\n**Field hints** (use get_type_info for relation fields):\n${hints.join('\n\n')}`;
+        }
+      }
+
       const scriptPreview = script.split('\n')[0].slice(0, 60);
       mcpLog('impex_import', env.name,
         `${isErr ? '❌' : '✅'} ${result.result || 'Done'} — ${scriptPreview}…`,
