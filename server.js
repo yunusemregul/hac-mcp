@@ -49,15 +49,21 @@ async function withSession(env, fn) {
 
 // ─── HAC request log → SSE broadcast ─────────────────────────────────────────
 const hacLogClients = new Set();
+const hacLogBuffer = [];
 setHacLogger(entry => {
+  hacLogBuffer.push(entry);
+  if (hacLogBuffer.length > 50) hacLogBuffer.shift();
   const data = `data: ${JSON.stringify(entry)}\n\n`;
   for (const res of hacLogClients) res.write(data);
 });
 
 // ─── MCP activity log → SSE broadcast ────────────────────────────────────────
 const logClients = new Set();
+const mcpLogBuffer = [];
 
 function broadcastLog(entry) {
+  mcpLogBuffer.push(entry);
+  if (mcpLogBuffer.length > 50) mcpLogBuffer.shift();
   const data = `data: ${JSON.stringify(entry)}\n\n`;
   for (const res of logClients) res.write(data);
 }
@@ -728,6 +734,7 @@ app.get('/api/hac-log', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
+  for (const entry of hacLogBuffer) res.write(`data: ${JSON.stringify(entry)}\n\n`);
   hacLogClients.add(res);
   req.on('close', () => hacLogClients.delete(res));
 });
@@ -738,6 +745,7 @@ app.get('/api/mcp-log', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
+  for (const entry of mcpLogBuffer) res.write(`data: ${JSON.stringify(entry)}\n\n`);
   logClients.add(res);
   req.on('close', () => logClients.delete(res));
 });

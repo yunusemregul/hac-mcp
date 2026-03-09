@@ -123,12 +123,9 @@ async function del(id) {
 }
 
 // ─── HAC request log (SSE) ───────────────────────────────────────────────────
-let hacLogStart = Date.now();
-
 function clearLog(listId) {
   const el = document.getElementById(listId);
   el.innerHTML = `<div class="empty" style="padding:20px">Cleared.</div>`;
-  if (listId === 'hacLogList') hacLogStart = Date.now();
 }
 
 const BADGE = { http: 'HTTP', info: 'INFO', ok: 'OK', error: 'ERR' };
@@ -138,19 +135,19 @@ function appendHacLog(entry) {
   const empty = list.querySelector('.empty');
   if (empty) empty.remove();
 
-  const elapsed = ((entry.ts - hacLogStart) / 1000).toFixed(2);
+  const time = new Date(entry.ts).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
   const line = document.createElement('div');
   line.className = `hac-log-line ${entry.level}`;
   line.innerHTML =
-    `<span class="hac-ts">+${elapsed}s</span>` +
+    `<span class="hac-ts">${time}</span>` +
     `<span class="hac-badge">[${BADGE[entry.level] || entry.level}]</span>` +
     `<span class="hac-msg">${esc(entry.msg)}</span>`;
   list.appendChild(line);
   list.scrollTop = list.scrollHeight;
 
-  // cap at 200 lines
+  // cap at 50 lines
   const lines = list.querySelectorAll('.hac-log-line');
-  if (lines.length > 200) lines[0].remove();
+  if (lines.length > 50) lines[0].remove();
 }
 
 const hacEs = new EventSource('/api/hac-log');

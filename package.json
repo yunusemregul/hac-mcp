@@ -4,7 +4,8 @@
   "type": "module",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "restart": "pm2 restart hac-mcp"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
