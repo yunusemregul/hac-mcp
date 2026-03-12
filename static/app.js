@@ -33,7 +33,7 @@ function render() {
         <div class="env-url">${esc(e.url)}</div>
         ${e.description ? `<div class="env-desc">${esc(e.description)}</div>` : ''}
         <div class="env-badges">
-          ${e.dbType ? `<span class="badge on">${esc(e.dbType)}</span>` : ''}
+          ${e.dbType ? `<span class="badge db"><svg width="9" height="9" viewBox="0 0 9 9" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;margin-right:3px;margin-top:-1px"><ellipse cx="4.5" cy="2" rx="3.5" ry="1.3" stroke="currentColor" stroke-width="1"/><path d="M1 2v5c0 .72 1.57 1.3 3.5 1.3S8 7.72 8 7V2" stroke="currentColor" stroke-width="1"/><path d="M1 4.5c0 .72 1.57 1.3 3.5 1.3S8 5.22 8 4.5" stroke="currentColor" stroke-width="1"/></svg>${esc(e.dbType)}</span>` : ''}
           <span class="badge ${e.allowFlexSearch ? 'on':'off'}">FLEX ${e.allowFlexSearch ? 'ON':'OFF'}</span>
           <span class="badge ${e.allowImpexImport ? 'on':'off'}">IMPEX ${e.allowImpexImport ? 'ON':'OFF'}</span>
         </div>
@@ -84,7 +84,7 @@ function openForm(id) {
   document.getElementById('fPass').value = e?.password ?? '';
   document.getElementById('fFlex').checked = e ? e.allowFlexSearch : true;
   document.getElementById('fImpex').checked = e ? e.allowImpexImport : true;
-  document.getElementById('fDbType').value = e?.dbType ?? '';
+  document.getElementById('fDbType').value = e?.dbType ?? 'MSSQL';
   document.getElementById('fName').focus();
 }
 
