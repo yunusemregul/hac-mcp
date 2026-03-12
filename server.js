@@ -70,8 +70,14 @@ function broadcastLog(entry) {
   for (const res of logClients) res.write(data);
 }
 
-function mcpLog(tool, envName, preview, detail, isError = false) {
-  broadcastLog({ tool, envName, preview, detail, isError, ts: Date.now() });
+function mcpLogStart(tool, envName, preview) {
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2);
+  broadcastLog({ id, tool, envName, preview, status: 'running', ts: Date.now() });
+  return id;
+}
+
+function mcpLog(tool, envName, preview, detail, isError = false, runId = null) {
+  broadcastLog({ id: runId, tool, envName, preview, detail, isError, status: 'done', ts: Date.now() });
   console.error(`[MCP] ${tool}${envName ? ' / ' + envName : ''} — ${preview}`);
 }
 
@@ -234,15 +240,16 @@ function formatImpexDetails(details) {
 
 // ─── MCP server factory ───────────────────────────────────────────────────────
 function createMcpInstance() {
-  const mcp = new McpServer({ name: 'hac-mcp', version: '1.0.0' });
+  const mcp = new McpServer({ name: 'hac-mcp', version: '1.0.0' }, { timeout: 30000 });
 
   mcp.registerTool(
     'list_environments',
     { description: 'List all configured HAC environments with their names, descriptions, and allowed operations.' },
     async () => {
+      const runId = mcpLogStart('list_environments', '', 'Listing environments…');
       const envs = await listEnvironments();
       if (!envs.length) {
-        mcpLog('list_environments', '', 'No environments configured', 'No environments found.');
+        mcpLog('list_environments', '', 'No environments configured', 'No environments found.', false, runId);
         return text('No environments configured. Add one via the management UI.');
       }
       const lines = envs.map(e =>
@@ -251,7 +258,7 @@ function createMcpInstance() {
         `  DB: ${e.dbType || 'unknown'}  FlexSearch: ${e.allowFlexSearch ? '✅' : '❌'}  ImpEx Import: ${e.allowImpexImport ? '✅' : '❌'}`
       );
       const out = `## HAC Environments\n\n${lines.join('\n\n')}`;
-      mcpLog('list_environments', '', `${envs.length} environment(s)`, out);
+      mcpLog('list_environments', '', `${envs.length} environment(s)`, out, false, runId);
       return text(out);
     }
   );
@@ -279,11 +286,13 @@ function createMcpInstance() {
         return error(`FlexibleSearch is disabled for environment "${env.name}".`);
       }
 
+      const runId = mcpLogStart('flexible_search', env.name, `${query.slice(0, 60)}${query.length > 60 ? '…' : ''}`);
+
       let result;
       try {
         result = await withSession(env, s => flexibleSearch(s, query, { maxCount, locale, dataSource }));
       } catch (e) {
-        mcpLog('flexible_search', env.name, `Error: ${e.message}`, e.stack || '', true);
+        mcpLog('flexible_search', env.name, `Error: ${e.message}`, e.stack || '', true, runId);
         return error(e.message);
       }
 
@@ -303,7 +312,7 @@ function createMcpInstance() {
           } else {
             detail += `\n\nTip: use get_type_info with typeCode "${parsedTypeCode}" to see valid fields.`;
           }
-          mcpLog('flexible_search', env.name, `Query error`, detail, true);
+          mcpLog('flexible_search', env.name, `Query error`, detail, true, runId);
           return error(`Query error: ${detail}`);
         }
 
@@ -315,11 +324,11 @@ function createMcpInstance() {
             const suggestions = fuzzySearch(unknownType, types, { topN: 5 });
             if (suggestions.length) detail += ` Did you mean: ${suggestions.join(', ')}?`;
           } catch (_) {}
-          mcpLog('flexible_search', env.name, `Query error`, detail, true);
+          mcpLog('flexible_search', env.name, `Query error`, detail, true, runId);
           return error(`Query error: ${detail}`);
         }
 
-        mcpLog('flexible_search', env.name, `Query error`, rawDetail, true);
+        mcpLog('flexible_search', env.name, `Query error`, rawDetail, true, runId);
         return error(`Query error: ${rawDetail}`);
       }
 
@@ -340,7 +349,7 @@ function createMcpInstance() {
 
       mcpLog('flexible_search', env.name,
         `${resultCount} row(s) in ${executionTime}ms — ${query.slice(0, 60)}${query.length > 60 ? '…' : ''}`,
-        `Query: ${query}\n\nResult:\n${out}`
+        `Query: ${query}\n\nResult:\n${out}`, false, runId
       );
       return text(out);
     }
@@ -359,19 +368,23 @@ function createMcpInstance() {
       const env = await getEnvironment(environmentId);
       if (!env) return error(`Environment "${environmentId}" not found.`);
 
+      const runId = mcpLogStart('search_type', env.name, `Searching "${query}"…`);
+
       let types;
       try {
         types = await getTypeIndex(env);
       } catch (e) {
+        mcpLog('search_type', env.name, `Error: ${e.message}`, '', true, runId);
         return error(`Failed to load type index: ${e.message}`);
       }
 
       const matches = fuzzySearch(query, types, { topN: 20 });
       if (!matches.length) {
+        mcpLog('search_type', env.name, `No types for "${query}"`, '', false, runId);
         return text(`No types found matching "${query}".`);
       }
 
-      mcpLog('search_type', env.name, `${matches.length} type(s) for "${query}"`, matches.join('\n'));
+      mcpLog('search_type', env.name, `${matches.length} type(s) for "${query}"`, matches.join('\n'), false, runId);
       return text(`Types matching "${query}":\n${matches.join('\n')}`);
     }
   );
@@ -390,6 +403,8 @@ function createMcpInstance() {
       const env = await getEnvironment(environmentId);
       if (!env) return error(`Environment "${environmentId}" not found.`);
 
+      const runId = mcpLogStart('get_type_info', env.name, `Type info: ${typeCode}`);
+
       // 1. Find the ComposedType
       let typeResult;
       try {
@@ -397,15 +412,19 @@ function createMcpInstance() {
           `SELECT {pk}, {code}, {supertype}, {jaloclass}, {inheritancepathstring}, {extensionname}, {catalogitemtype}, {singleton} FROM {ComposedType} WHERE {code} = '${typeCode}'`
         ));
       } catch (e) {
+        mcpLog('get_type_info', env.name, `Error: ${e.message}`, '', true, runId);
         return error(e.message);
       }
 
       if (typeResult.exception) {
         const ex = typeResult.exception;
-        return error(ex.message || ex.localizedMessage || JSON.stringify(ex));
+        const msg = ex.message || ex.localizedMessage || JSON.stringify(ex);
+        mcpLog('get_type_info', env.name, `Query error`, msg, true, runId);
+        return error(msg);
       }
 
       if (!typeResult.resultList?.length) {
+        mcpLog('get_type_info', env.name, `Type not found: ${typeCode}`, '', true, runId);
         return error(`Type "${typeCode}" not found. Check the type code (case-sensitive).`);
       }
 
@@ -551,7 +570,7 @@ function createMcpInstance() {
         }
       }
 
-      mcpLog('get_type_info', env.name, `Type info: ${code} (${allAttrs.length} attrs)`, out);
+      mcpLog('get_type_info', env.name, `Type info: ${code} (${allAttrs.length} attrs)`, out, false, runId);
       return text(out);
     }
   );
@@ -570,11 +589,13 @@ function createMcpInstance() {
       if (!env) return error(`Environment "${environmentId}" not found.`);
       if (!env.allowFlexSearch) return error(`FlexibleSearch is disabled for environment "${env.name}".`);
 
+      const runId = mcpLogStart('resolve_pk', env.name, `Resolving PK ${pk}…`);
+
       let analysis;
       try {
         analysis = await withSession(env, s => pkAnalyze(s, pk));
       } catch (e) {
-        mcpLog('resolve_pk', env.name, `Error: ${e.message}`, '', true);
+        mcpLog('resolve_pk', env.name, `Error: ${e.message}`, '', true, runId);
         return error(`PK analysis failed: ${e.message}`);
       }
 
@@ -625,7 +646,7 @@ function createMcpInstance() {
         }
       }
 
-      mcpLog('resolve_pk', env.name, `PK ${pk} → ${typeCode}`, out);
+      mcpLog('resolve_pk', env.name, `PK ${pk} → ${typeCode}`, out, false, runId);
       return text(out);
     }
   );
@@ -656,6 +677,9 @@ function createMcpInstance() {
         return error(`ImpEx import is disabled for environment "${env.name}".`);
       }
 
+      const scriptPreview = script.split('\n')[0].slice(0, 60);
+      const runId = mcpLogStart('impex_import', env.name, `${scriptPreview}…`);
+
       // Pre-validate mandatory fields
       let validationWarnings = [];
       try {
@@ -664,7 +688,7 @@ function createMcpInstance() {
 
       if (validationWarnings.length) {
         const warnOut = `**Pre-validation warnings** (import not executed):\n${validationWarnings.map(w => `- ${w}`).join('\n')}\n\nFix the script and retry.`;
-        mcpLog('impex_import', env.name, `Pre-validation failed`, warnOut, true);
+        mcpLog('impex_import', env.name, `Pre-validation failed`, warnOut, true, runId);
         return error(warnOut);
       }
 
@@ -674,7 +698,7 @@ function createMcpInstance() {
           validationEnum, maxThreads, legacyMode, enableCodeExecution, distributedMode, sldEnabled,
         }));
       } catch (e) {
-        mcpLog('impex_import', env.name, `Error: ${e.message}`, e.stack || '', true);
+        mcpLog('impex_import', env.name, `Error: ${e.message}`, e.stack || '', true, runId);
         return error(e.message);
       }
 
@@ -698,11 +722,10 @@ function createMcpInstance() {
         }
       }
 
-      const scriptPreview = script.split('\n')[0].slice(0, 60);
       mcpLog('impex_import', env.name,
         `${isErr ? '❌' : '✅'} ${result.result || 'Done'} — ${scriptPreview}…`,
         `Script:\n${script}\n\nResult: ${result.result}\n\n${result.details || ''}`,
-        isErr
+        isErr, runId
       );
       return text(out);
     }

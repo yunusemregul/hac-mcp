@@ -167,11 +167,14 @@ const TOOL_META = {
 };
 
 
+const runningEntries = new Map(); // server runId → DOM element id
+
 function appendLogEntry(entry) {
   const list = document.getElementById('logList');
   const empty = list.querySelector('.empty');
   if (empty) empty.remove();
 
+  const isRunning = entry.status === 'running';
   const meta = TOOL_META[entry.tool] || { label: entry.tool?.toUpperCase() ?? '?', cls: 'list' };
   const isErr = entry.isError;
   const toolCls = isErr ? 'err' : meta.cls;
@@ -181,12 +184,29 @@ function appendLogEntry(entry) {
   const preview = esc(entry.preview || '');
   const time = new Date(entry.ts).toLocaleTimeString();
 
-  const id = 'log-' + entry.ts + '-' + Math.random().toString(36).slice(2);
+  // If this is a completion event for a running entry, update it in place
+  if (!isRunning && entry.id && runningEntries.has(entry.id)) {
+    const domId = runningEntries.get(entry.id);
+    runningEntries.delete(entry.id);
+    const item = document.getElementById(domId);
+    if (item) {
+      item.classList.remove('running');
+      if (isErr) item.classList.add('error');
+      item.querySelector('.log-tool').className = `log-tool ${toolCls}`;
+      item.querySelector('.log-tool').textContent = toolLabel;
+      item.querySelector('.log-preview').textContent = entry.preview || '';
+      item.querySelector('.log-time').textContent = time;
+      item.querySelector('.log-detail pre').textContent = entry.detail || '';
+      return;
+    }
+  }
+
+  const domId = 'log-' + entry.ts + '-' + Math.random().toString(36).slice(2);
   const item = document.createElement('div');
-  item.className = 'log-entry';
-  item.id = id;
+  item.className = 'log-entry' + (isRunning ? ' running' : '') + (isErr ? ' error' : '');
+  item.id = domId;
   item.innerHTML = `
-    <div class="log-summary" onclick="toggleLog('${id}')">
+    <div class="log-summary" onclick="toggleLog('${domId}')">
       <span class="log-chevron">▶</span>
       <span class="log-tool ${toolCls}">${toolLabel}</span>
       ${envName ? `<span class="log-env">${envName}</span>` : ''}
@@ -195,6 +215,8 @@ function appendLogEntry(entry) {
     </div>
     <div class="log-detail"><pre>${esc(entry.detail || '')}</pre></div>
   `;
+
+  if (isRunning && entry.id) runningEntries.set(entry.id, domId);
 
   list.insertBefore(item, list.firstChild); // newest on top
   // Keep at most 50 entries

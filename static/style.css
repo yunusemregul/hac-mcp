@@ -101,6 +101,11 @@ input:focus,select:focus{border-color:#3b82f6}
 .log-entry.open .log-detail{display:block}
 .log-detail pre{font-family:'JetBrains Mono','Fira Code',monospace;font-size:.72rem;color:#94a3b8;white-space:pre-wrap;word-break:break-all;line-height:1.5}
 
+.log-entry.running{background:#0d1520}
+.log-entry.running .log-summary{opacity:.85}
+.log-entry.running .log-chevron{animation:spin .8s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+
 /* HAC request log */
 .hac-log-list{max-height:260px;overflow-y:auto;padding:6px 0;font-family:'JetBrains Mono','Fira Code',monospace;font-size:.72rem}
 .hac-log-line{display:flex;gap:8px;padding:2px 14px;line-height:1.6}
