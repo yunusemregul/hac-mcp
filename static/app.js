@@ -33,6 +33,7 @@ function render() {
         <div class="env-url">${esc(e.url)}</div>
         ${e.description ? `<div class="env-desc">${esc(e.description)}</div>` : ''}
         <div class="env-badges">
+          ${e.dbType ? `<span class="badge on">${esc(e.dbType)}</span>` : ''}
           <span class="badge ${e.allowFlexSearch ? 'on':'off'}">FLEX ${e.allowFlexSearch ? 'ON':'OFF'}</span>
           <span class="badge ${e.allowImpexImport ? 'on':'off'}">IMPEX ${e.allowImpexImport ? 'ON':'OFF'}</span>
         </div>
@@ -83,6 +84,7 @@ function openForm(id) {
   document.getElementById('fPass').value = e?.password ?? '';
   document.getElementById('fFlex').checked = e ? e.allowFlexSearch : true;
   document.getElementById('fImpex').checked = e ? e.allowImpexImport : true;
+  document.getElementById('fDbType').value = e?.dbType ?? '';
   document.getElementById('fName').focus();
 }
 
@@ -98,6 +100,7 @@ async function saveEnv() {
     password: document.getElementById('fPass').value,
     allowFlexSearch: document.getElementById('fFlex').checked,
     allowImpexImport: document.getElementById('fImpex').checked,
+    dbType: document.getElementById('fDbType').value || null,
   };
   if (!data.name || !data.url || !data.username) { toast('Name, URL and username are required', 'err'); return; }
   const res = await fetch(id ? `/api/environments/${id}` : '/api/environments', {

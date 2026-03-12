@@ -10,3 +10,4 @@ build/
 coverage/
 .nyc_output/
 .cache/
+temporary_works/

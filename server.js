@@ -5,6 +5,7 @@ import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { z } from 'zod';
 import { login, flexibleSearch, impexImport, pkAnalyze, SessionExpiredError, setHacLogger } from './hac.js';
 import { listEnvironments, getEnvironment, createEnvironment, updateEnvironment, deleteEnvironment } from './storage.js';
+import { getIndex, invalidateIndex, fuzzySearch } from './type-index.js';
 
 const PORT = process.env.PORT || 3333;
 
@@ -29,6 +30,7 @@ async function getSession(env) {
 
 function invalidateSession(envId) {
   sessions.delete(envId);
+  invalidateIndex(envId);
 }
 
 // Execute fn(session). If the session has expired, invalidate, re-login once, retry.
@@ -73,18 +75,30 @@ function mcpLog(tool, envName, preview, detail, isError = false) {
   console.error(`[MCP] ${tool}${envName ? ' / ' + envName : ''} — ${preview}`);
 }
 
+// ─── Type index helpers ───────────────────────────────────────────────────────
+async function getTypeIndex(env) {
+  return getIndex(env.id, (query, opts) => withSession(env, s => flexibleSearch(s, query, opts)));
+}
+
 // ─── FlexibleSearch error parser ──────────────────────────────────────────────
 function parseFlexSearchError(msg) {
   if (!msg?.includes('cannot search unknown field')) return null;
   const unknownField = msg.match(/TableField\(name='([^']+)'/)?.[1];
-  const typeName = msg.match(/within type (\w+)/)?.[1];
+  const typeCode = msg.match(/within type (\w+)/)?.[1];
   const parseSection = str => str ? [...str.matchAll(/^\s{6}(\w+)\s*=/gm)].map(m => m[1]) : [];
   const core = parseSection(msg.match(/core fields\s*=\s*\n([\s\S]*?)(?=\n\s{3}\w+ fields)/)?.[1]);
   const unlocalized = parseSection(msg.match(/unlocalized fields\s*=\s*\n([\s\S]*?)(?=\n\s{3}\w+ fields)/)?.[1]);
   const localized = parseSection(msg.match(/localized fields\s*=\s*\n([\s\S]*?)(?=\n\))/)?.[1]);
   const allFields = [...core, ...unlocalized, ...localized];
-  if (!typeName || !allFields.length) return null;
-  return { unknownField, typeName, allFields };
+  if (!typeCode || !allFields.length) return null;
+  return { unknownField, typeCode, allFields };
+}
+
+function parseUnknownTypeError(msg) {
+  if (!msg) return null;
+  // "unknown type 'Foo'" or "The type 'Foo' is unknown"
+  const m = msg.match(/unknown type[:\s]+'?(\w+)'?/i) || msg.match(/[Tt]he type '(\w+)' is unknown/);
+  return m?.[1] ?? null;
 }
 
 // ─── Auto-resolve scalar fields for inline error enrichment ──────────────────
@@ -234,7 +248,7 @@ function createMcpInstance() {
       const lines = envs.map(e =>
         `- **${e.name}** (id: \`${e.id}\`)\n` +
         `  ${e.description || 'No description'}\n` +
-        `  FlexSearch: ${e.allowFlexSearch ? '✅' : '❌'}  ImpEx Import: ${e.allowImpexImport ? '✅' : '❌'}`
+        `  DB: ${e.dbType || 'unknown'}  FlexSearch: ${e.allowFlexSearch ? '✅' : '❌'}  ImpEx Import: ${e.allowImpexImport ? '✅' : '❌'}`
       );
       const out = `## HAC Environments\n\n${lines.join('\n\n')}`;
       mcpLog('list_environments', '', `${envs.length} environment(s)`, out);
@@ -281,14 +295,26 @@ function createMcpInstance() {
 
         const parsed = parseFlexSearchError(causeMsg) || parseFlexSearchError(msg);
         if (parsed) {
-          const { unknownField, typeName } = parsed;
-          let detail = `Unknown field "{${unknownField}}" on type ${typeName}.`;
-          const scalarFields = await fetchScalarFields(env, typeName);
+          const { unknownField, typeCode: parsedTypeCode } = parsed;
+          let detail = `Unknown field "{${unknownField}}" on type ${parsedTypeCode}.`;
+          const scalarFields = await fetchScalarFields(env, parsedTypeCode);
           if (scalarFields) {
-            detail += `\n\nValid scalar fields for ${typeName}:\n  ${scalarFields}\n\nFor relation/collection fields use get_type_info.`;
+            detail += `\n\nValid scalar fields for ${parsedTypeCode}:\n  ${scalarFields}\n\nFor relation/collection fields use get_type_info.`;
           } else {
-            detail += `\n\nTip: use get_type_info with typeCode "${typeName}" to see valid fields.`;
+            detail += `\n\nTip: use get_type_info with typeCode "${parsedTypeCode}" to see valid fields.`;
           }
+          mcpLog('flexible_search', env.name, `Query error`, detail, true);
+          return error(`Query error: ${detail}`);
+        }
+
+        const unknownType = parseUnknownTypeError(causeMsg) || parseUnknownTypeError(msg);
+        if (unknownType) {
+          let detail = `Unknown type "${unknownType}".`;
+          try {
+            const types = await getTypeIndex(env);
+            const suggestions = fuzzySearch(unknownType, types, { topN: 5 });
+            if (suggestions.length) detail += ` Did you mean: ${suggestions.join(', ')}?`;
+          } catch (_) {}
           mcpLog('flexible_search', env.name, `Query error`, detail, true);
           return error(`Query error: ${detail}`);
         }
@@ -323,38 +349,30 @@ function createMcpInstance() {
   mcp.registerTool(
     'search_type',
     {
-      description: 'Search for SAP Commerce type names by partial match. Use this before get_type_info when you are unsure of the exact type code.',
+      description: 'Search for SAP Commerce type names by fuzzy match. Use this before get_type_info when you are unsure of the exact type code.',
       inputSchema: {
         environmentId: z.string().describe('Environment ID from list_environments'),
-        query: z.string().describe('Partial type name to search for, e.g. "Solr", "Order", "Product"'),
+        query: z.string().describe('Type name to search for — fuzzy, e.g. "InboundProductLogs", "Solr", "Order"'),
       },
     },
     async ({ environmentId, query }) => {
       const env = await getEnvironment(environmentId);
       if (!env) return error(`Environment "${environmentId}" not found.`);
 
-      let result;
+      let types;
       try {
-        result = await withSession(env, s => flexibleSearch(s,
-          `SELECT {code} FROM {ComposedType} WHERE {code} LIKE '%${query}%' ORDER BY {code} ASC`,
-          { maxCount: 50 }
-        ));
+        types = await getTypeIndex(env);
       } catch (e) {
-        return error(e.message);
+        return error(`Failed to load type index: ${e.message}`);
       }
 
-      if (result.exception) {
-        const ex = result.exception;
-        return error(ex.message || ex.localizedMessage || JSON.stringify(ex));
-      }
-
-      if (!result.resultList?.length) {
+      const matches = fuzzySearch(query, types, { topN: 20 });
+      if (!matches.length) {
         return text(`No types found matching "${query}".`);
       }
 
-      const types = result.resultList.map(([code]) => code).join('\n');
-      mcpLog('search_type', env.name, `${result.resultList.length} type(s) for "${query}"`, types);
-      return text(`Types matching "${query}":\n${types}`);
+      mcpLog('search_type', env.name, `${matches.length} type(s) for "${query}"`, matches.join('\n'));
+      return text(`Types matching "${query}":\n${matches.join('\n')}`);
     }
   );
 
@@ -715,6 +733,17 @@ app.put('/api/environments/:id', async (req, res) => {
 app.delete('/api/environments/:id', async (req, res) => {
   try { await deleteEnvironment(req.params.id); res.json({ ok: true }); }
   catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+app.post('/api/environments/:id/refresh-index', async (req, res) => {
+  const env = await getEnvironment(req.params.id);
+  if (!env) return res.status(404).json({ ok: false, error: 'Environment not found' });
+  try {
+    const types = await getTypeIndex(env);
+    res.json({ ok: true, count: types.length });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
 });
 
 app.post('/api/environments/:id/test', async (req, res) => {
