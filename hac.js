@@ -274,6 +274,25 @@ export async function groovyExecute(session, script, { commit = false } = {}) {
   return result;
 }
 
+export async function readProperties(session) {
+  const { ctx, envName } = session;
+
+  log('info', `Fetching configuration properties page`, envName);
+  const page = await httpRequest(opts(session, ctx + '/platform/config', 'GET'));
+  assertNotLoginPage(page);
+
+  // Parse <tr id="key"> ... <input ... name="key" value="val"/> ... </tr>
+  const properties = {};
+  const rowRegex = /<tr\s+id="([^"]+)"[\s\S]*?<input[^>]+class="configValue"[^>]+name="[^"]*"[^>]+value="([^"]*)"[^>]*\/>/g;
+  let m;
+  while ((m = rowRegex.exec(page.body)) !== null) {
+    properties[m[1]] = htmlDecode(m[2]);
+  }
+
+  log('ok', `Parsed ${Object.keys(properties).length} properties`, envName);
+  return properties;
+}
+
 export async function pkAnalyze(session, pk) {
   const { ctx, host, envName } = session;
   log('info', `Fetching PK analyzer page for CSRF token`, envName);

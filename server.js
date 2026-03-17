@@ -3,7 +3,7 @@ import { createServer } from 'http';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { z } from 'zod';
-import { login, flexibleSearch, impexImport, groovyExecute, pkAnalyze, SessionExpiredError, setHacLogger } from './hac.js';
+import { login, flexibleSearch, impexImport, groovyExecute, pkAnalyze, readProperties, SessionExpiredError, setHacLogger } from './hac.js';
 import { listEnvironments, getEnvironment, createEnvironment, updateEnvironment, deleteEnvironment } from './storage.js';
 import { getIndex, invalidateIndex, fuzzySearch } from './type-index.js';
 
@@ -255,7 +255,7 @@ function createMcpInstance() {
       const lines = envs.map(e =>
         `- **${e.name}** (id: \`${e.id}\`)\n` +
         `  ${e.description || 'No description'}\n` +
-        `  DB: ${e.dbType || 'unknown'}  FlexSearch: ${e.allowFlexSearch ? '✅' : '❌'}  ImpEx Import: ${e.allowImpexImport ? '✅' : '❌'}  Groovy: ${e.allowGroovyExecution ? '✅' : '❌'}`
+        `  DB: ${e.dbType || 'unknown'}  FlexSearch: ${e.allowFlexSearch ? '✅' : '❌'}  ImpEx Import: ${e.allowImpexImport ? '✅' : '❌'}  Groovy: ${e.allowGroovyExecution ? '✅' : '❌'}  Read Property: ${e.allowReadProperty !== false ? '✅' : '❌'}`
       );
       const out = `## HAC Environments\n\n${lines.join('\n\n')}`;
       mcpLog('list_environments', '', `${envs.length} environment(s)`, out, false, runId);
@@ -774,6 +774,53 @@ function createMcpInstance() {
         `Script:\n${script}\n\nResult: ${result.executionResult}\n\n${result.stacktraceText || ''}`,
         isErr, runId
       );
+      return text(out);
+    }
+  );
+
+  mcp.registerTool(
+    'read_property',
+    {
+      description: 'Search HAC configuration properties by key or value. Returns matching key-value pairs from the platform configuration page.',
+      inputSchema: {
+        environmentId: z.string().describe('Environment ID from list_environments'),
+        search: z.string().describe('Search term — matches against property keys and values (case-insensitive substring)'),
+      },
+    },
+    async ({ environmentId, search }) => {
+      const env = await getEnvironment(environmentId);
+      if (!env) {
+        mcpLog('read_property', environmentId, 'Unknown environment', '', true);
+        return error(`Environment "${environmentId}" not found.`);
+      }
+      if (env.allowReadProperty === false) {
+        mcpLog('read_property', env.name, 'Read property disabled', '', true);
+        return error(`Read property is disabled for environment "${env.name}".`);
+      }
+
+      const runId = mcpLogStart('read_property', env.name, `Searching "${search}"…`);
+
+      let properties;
+      try {
+        properties = await withSession(env, s => readProperties(s));
+      } catch (e) {
+        mcpLog('read_property', env.name, `Error: ${e.message}`, '', true, runId);
+        return error(e.message);
+      }
+
+      const term = search.toLowerCase();
+      const matches = Object.entries(properties).filter(
+        ([k, v]) => k.toLowerCase().includes(term) || v.toLowerCase().includes(term)
+      );
+
+      if (!matches.length) {
+        mcpLog('read_property', env.name, `No properties matching "${search}"`, '', false, runId);
+        return text(`No properties found matching "${search}".`);
+      }
+
+      const lines = matches.map(([k, v]) => `${k} = ${v}`).join('\n');
+      const out = `**${env.name}** — ${matches.length} property match(es) for "${search}":\n\n\`\`\`\n${lines}\n\`\`\``;
+      mcpLog('read_property', env.name, `${matches.length} match(es) for "${search}"`, out, false, runId);
       return text(out);
     }
   );
