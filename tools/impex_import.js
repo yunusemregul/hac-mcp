@@ -3,6 +3,8 @@ import { flexibleSearch, impexImport } from '../hac.js';
 import { withSession, getEnvironment, mcpLogStart, mcpLog, text, error } from './context.js';
 import { fetchScalarFields } from './flexible_search.js';
 
+const TOOL = 'impex_import';
+
 function parseImpexHeaders(script) {
   const result = [];
   for (const line of script.split('\n')) {
@@ -89,82 +91,78 @@ function formatImpexDetails(details) {
   }).join('\n');
 }
 
-export function register(mcp) {
-  mcp.registerTool(
-    'impex_import',
-    {
-      description: 'Execute an ImpEx import script on a HAC environment. Call list_environments first to check import is allowed. IMPORTANT: Before calling this tool, you MUST show the user a summary of what data the script will insert, update, or remove and explicitly ask for their confirmation. Only proceed after the user approves.',
-      inputSchema: {
-        environmentId: z.string().describe('Environment ID from list_environments'),
-        script: z.string().describe('ImpEx script content'),
-        validationEnum: z.enum(['IMPORT_STRICT', 'IMPORT_RELAXED']).optional(),
-        maxThreads: z.number().optional(),
-        legacyMode: z.boolean().optional(),
-        enableCodeExecution: z.boolean().optional(),
-        distributedMode: z.boolean().optional(),
-        sldEnabled: z.boolean().optional(),
-      },
-    },
-    async ({ environmentId, script, validationEnum, maxThreads, legacyMode, enableCodeExecution, distributedMode, sldEnabled }) => {
-      const env = await getEnvironment(environmentId);
-      if (!env) {
-        mcpLog('impex_import', environmentId, 'Unknown environment', '', true);
-        return error(`Environment "${environmentId}" not found.`);
-      }
-      if (!env.allowImpexImport) {
-        mcpLog('impex_import', env.name, 'ImpEx disabled', '', true);
-        return error(`ImpEx import is disabled for environment "${env.name}".`);
-      }
-
-      const scriptPreview = script.split('\n')[0].slice(0, 60);
-      const runId = mcpLogStart('impex_import', env.name, `${scriptPreview}…`);
-
-      let validationWarnings = [];
-      try {
-        validationWarnings = await validateImpexScript(env, script);
-      } catch (_) {}
-
-      if (validationWarnings.length) {
-        const warnOut = `**Pre-validation warnings** (import not executed):\n${validationWarnings.map(w => `- ${w}`).join('\n')}\n\nFix the script and retry.`;
-        mcpLog('impex_import', env.name, `Pre-validation failed`, warnOut, true, runId);
-        return error(warnOut);
-      }
-
-      let result;
-      try {
-        result = await withSession(env, s => impexImport(s, script, {
-          validationEnum, maxThreads, legacyMode, enableCodeExecution, distributedMode, sldEnabled,
-        }));
-      } catch (e) {
-        mcpLog('impex_import', env.name, `Error: ${e.message}`, e.stack || '', true, runId);
-        return error(e.message);
-      }
-
-      const isErr = result.level === 'error';
-      const icon = isErr ? '❌' : '✅';
-      let out = `**${env.name}** — ${icon} ${result.result || 'Import complete'}\n`;
-      if (result.details) out += `\n\`\`\`\n${formatImpexDetails(result.details)}\n\`\`\``;
-
-      if (isErr && result.details) {
-        const unknownAttrTypes = [...new Set(
-          [...result.details.matchAll(/unknown attributes \[(\w+)\.\w+\]/g)].map(m => m[1])
-        )];
-        if (unknownAttrTypes.length) {
-          const hints = [];
-          for (const typeName of unknownAttrTypes) {
-            const fields = await fetchScalarFields(env, typeName);
-            if (fields) hints.push(`**${typeName}** valid scalar fields:\n  ${fields}`);
-          }
-          if (hints.length) out += `\n\n**Field hints** (use get_type_info for relation fields):\n${hints.join('\n\n')}`;
-        }
-      }
-
-      mcpLog('impex_import', env.name,
-        `${isErr ? '❌' : '✅'} ${result.result || 'Done'} — ${scriptPreview}…`,
-        `Script:\n${script}\n\nResult: ${result.result}\n\n${result.details || ''}`,
-        isErr, runId
-      );
-      return text(out);
+export const tool = {
+  name: TOOL,
+  description: 'Execute an ImpEx import script on a HAC environment. Call list_environments first to check import is allowed. IMPORTANT: Before calling this tool, you MUST show the user a summary of what data the script will insert, update, or remove and explicitly ask for their confirmation. Only proceed after the user approves.',
+  inputSchema: {
+    environmentId: z.string().describe('Environment ID from list_environments'),
+    script: z.string().describe('ImpEx script content'),
+    validationEnum: z.enum(['IMPORT_STRICT', 'IMPORT_RELAXED']).optional(),
+    maxThreads: z.number().optional(),
+    legacyMode: z.boolean().optional(),
+    enableCodeExecution: z.boolean().optional(),
+    distributedMode: z.boolean().optional(),
+    sldEnabled: z.boolean().optional(),
+  },
+  handler: async ({ environmentId, script, validationEnum, maxThreads, legacyMode, enableCodeExecution, distributedMode, sldEnabled }) => {
+    const env = await getEnvironment(environmentId);
+    if (!env) {
+      mcpLog({ tool: TOOL, envName: environmentId, preview: 'Unknown environment', isError: true });
+      return error(`Environment "${environmentId}" not found.`);
     }
-  );
-}
+    if (!env.allowImpexImport) {
+      mcpLog({ tool: TOOL, envName: env.name, preview: 'ImpEx disabled', isError: true });
+      return error(`ImpEx import is disabled for environment "${env.name}".`);
+    }
+
+    const scriptPreview = script.split('\n')[0].slice(0, 60);
+    const runId = mcpLogStart({ tool: TOOL, envName: env.name, preview: `${scriptPreview}…` });
+
+    let validationWarnings = [];
+    try {
+      validationWarnings = await validateImpexScript(env, script);
+    } catch (_) {}
+
+    if (validationWarnings.length) {
+      const warnOut = `**Pre-validation warnings** (import not executed):\n${validationWarnings.map(w => `- ${w}`).join('\n')}\n\nFix the script and retry.`;
+      mcpLog({ tool: TOOL, envName: env.name, preview: 'Pre-validation failed', detail: warnOut, isError: true, runId });
+      return error(warnOut);
+    }
+
+    let result;
+    try {
+      result = await withSession(env, s => impexImport(s, script, {
+        validationEnum, maxThreads, legacyMode, enableCodeExecution, distributedMode, sldEnabled,
+      }));
+    } catch (e) {
+      mcpLog({ tool: TOOL, envName: env.name, preview: `Error: ${e.message}`, detail: e.stack || '', isError: true, runId });
+      return error(e.message);
+    }
+
+    const isErr = result.level === 'error';
+    const icon = isErr ? '❌' : '✅';
+    let out = `**${env.name}** — ${icon} ${result.result || 'Import complete'}\n`;
+    if (result.details) out += `\n\`\`\`\n${formatImpexDetails(result.details)}\n\`\`\``;
+
+    if (isErr && result.details) {
+      const unknownAttrTypes = [...new Set(
+        [...result.details.matchAll(/unknown attributes \[(\w+)\.\w+\]/g)].map(m => m[1])
+      )];
+      if (unknownAttrTypes.length) {
+        const hints = [];
+        for (const typeName of unknownAttrTypes) {
+          const fields = await fetchScalarFields(env, typeName);
+          if (fields) hints.push(`**${typeName}** valid scalar fields:\n  ${fields}`);
+        }
+        if (hints.length) out += `\n\n**Field hints** (use get_type_info for relation fields):\n${hints.join('\n\n')}`;
+      }
+    }
+
+    mcpLog({ tool: TOOL, envName: env.name,
+      preview: `${isErr ? '❌' : '✅'} ${result.result || 'Done'} — ${scriptPreview}…`,
+      detail: `Script:\n${script}\n\nResult: ${result.result}\n\n${result.details || ''}`,
+      isError: isErr, runId,
+    });
+    return text(out);
+  },
+};

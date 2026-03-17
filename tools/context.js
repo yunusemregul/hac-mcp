@@ -51,13 +51,13 @@ function broadcastLog(entry) {
   for (const res of logClients) res.write(data);
 }
 
-function mcpLogStart(tool, envName, preview) {
+function mcpLogStart({ tool, envName, preview }) {
   const id = Date.now().toString(36) + Math.random().toString(36).slice(2);
   broadcastLog({ id, tool, envName, preview, status: 'running', ts: Date.now() });
   return id;
 }
 
-function mcpLog(tool, envName, preview, detail, isError = false, runId = null) {
+function mcpLog({ tool, envName, preview, detail = '', isError = false, runId = null }) {
   broadcastLog({ id: runId, tool, envName, preview, detail, isError, status: 'done', ts: Date.now() });
   console.error(`[MCP] ${tool}${envName ? ' / ' + envName : ''} — ${preview}`);
 }
