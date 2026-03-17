@@ -36,7 +36,7 @@ function getAgent(hostname) {
   return agentCache[hostname];
 }
 
-const HTTP_TIMEOUT_MS = 30_000;
+const HTTP_TIMEOUT_MS = 60_000;
 
 function httpRequest(options, body = null) {
   return new Promise((resolve, reject) => {

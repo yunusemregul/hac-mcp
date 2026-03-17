@@ -22,7 +22,7 @@ setHacLogger(entry => {
 
 // ─── MCP server factory ───────────────────────────────────────────────────────
 function createMcpInstance() {
-  const mcp = new McpServer({ name: 'hac-mcp', version: '1.0.0' }, { timeout: 30000 });
+  const mcp = new McpServer({ name: 'hac-mcp', version: '1.0.0' }, { timeout: 60000 });
   registerAllTools(mcp);
   return mcp;
 }
