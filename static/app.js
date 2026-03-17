@@ -36,6 +36,7 @@ function render() {
           ${e.dbType ? `<span class="badge db"><svg width="9" height="9" viewBox="0 0 9 9" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;margin-right:3px;margin-top:-1px"><ellipse cx="4.5" cy="2" rx="3.5" ry="1.3" stroke="currentColor" stroke-width="1"/><path d="M1 2v5c0 .72 1.57 1.3 3.5 1.3S8 7.72 8 7V2" stroke="currentColor" stroke-width="1"/><path d="M1 4.5c0 .72 1.57 1.3 3.5 1.3S8 5.22 8 4.5" stroke="currentColor" stroke-width="1"/></svg>${esc(e.dbType)}</span>` : ''}
           <span class="badge ${e.allowFlexSearch ? 'on':'off'}">FLEX ${e.allowFlexSearch ? 'ON':'OFF'}</span>
           <span class="badge ${e.allowImpexImport ? 'on':'off'}">IMPEX ${e.allowImpexImport ? 'ON':'OFF'}</span>
+          <span class="badge ${e.allowGroovyExecution ? 'on':'off'}">GROOVY ${e.allowGroovyExecution ? 'ON':'OFF'}</span>
         </div>
       </div>
       <div class="env-actions">
@@ -84,6 +85,7 @@ function openForm(id) {
   document.getElementById('fPass').value = e?.password ?? '';
   document.getElementById('fFlex').checked = e ? e.allowFlexSearch : true;
   document.getElementById('fImpex').checked = e ? e.allowImpexImport : true;
+  document.getElementById('fGroovy').checked = e ? e.allowGroovyExecution : true;
   document.getElementById('fDbType').value = e?.dbType ?? 'MSSQL';
   document.getElementById('fName').focus();
 }
@@ -100,6 +102,7 @@ async function saveEnv() {
     password: document.getElementById('fPass').value,
     allowFlexSearch: document.getElementById('fFlex').checked,
     allowImpexImport: document.getElementById('fImpex').checked,
+    allowGroovyExecution: document.getElementById('fGroovy').checked,
     dbType: document.getElementById('fDbType').value || null,
   };
   if (!data.name || !data.url || !data.username) { toast('Name, URL and username are required', 'err'); return; }

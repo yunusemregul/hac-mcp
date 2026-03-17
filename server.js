@@ -3,7 +3,7 @@ import { createServer } from 'http';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { z } from 'zod';
-import { login, flexibleSearch, impexImport, pkAnalyze, SessionExpiredError, setHacLogger } from './hac.js';
+import { login, flexibleSearch, impexImport, groovyExecute, pkAnalyze, SessionExpiredError, setHacLogger } from './hac.js';
 import { listEnvironments, getEnvironment, createEnvironment, updateEnvironment, deleteEnvironment } from './storage.js';
 import { getIndex, invalidateIndex, fuzzySearch } from './type-index.js';
 
@@ -21,7 +21,7 @@ async function getSession(env) {
   // Login already in progress — wait for it instead of starting another
   if (loginLock.has(env.id)) return loginLock.get(env.id);
   // Start a new login and register the promise so concurrent callers wait on it
-  const promise = login(env.url, env.username, env.password)
+  const promise = login(env.url, env.username, env.password, env.name)
     .then(session => { sessions.set(env.id, session); return session; })
     .finally(() => loginLock.delete(env.id));
   loginLock.set(env.id, promise);
@@ -255,7 +255,7 @@ function createMcpInstance() {
       const lines = envs.map(e =>
         `- **${e.name}** (id: \`${e.id}\`)\n` +
         `  ${e.description || 'No description'}\n` +
-        `  DB: ${e.dbType || 'unknown'}  FlexSearch: ${e.allowFlexSearch ? '✅' : '❌'}  ImpEx Import: ${e.allowImpexImport ? '✅' : '❌'}`
+        `  DB: ${e.dbType || 'unknown'}  FlexSearch: ${e.allowFlexSearch ? '✅' : '❌'}  ImpEx Import: ${e.allowImpexImport ? '✅' : '❌'}  Groovy: ${e.allowGroovyExecution ? '✅' : '❌'}`
       );
       const out = `## HAC Environments\n\n${lines.join('\n\n')}`;
       mcpLog('list_environments', '', `${envs.length} environment(s)`, out, false, runId);
@@ -654,7 +654,7 @@ function createMcpInstance() {
   mcp.registerTool(
     'impex_import',
     {
-      description: 'Execute an ImpEx import script on a HAC environment. Call list_environments first to check import is allowed.',
+      description: 'Execute an ImpEx import script on a HAC environment. Call list_environments first to check import is allowed. IMPORTANT: Before calling this tool, you MUST show the user a summary of what data the script will insert, update, or remove and explicitly ask for their confirmation. Only proceed after the user approves.',
       inputSchema: {
         environmentId: z.string().describe('Environment ID from list_environments'),
         script: z.string().describe('ImpEx script content'),
@@ -725,6 +725,53 @@ function createMcpInstance() {
       mcpLog('impex_import', env.name,
         `${isErr ? '❌' : '✅'} ${result.result || 'Done'} — ${scriptPreview}…`,
         `Script:\n${script}\n\nResult: ${result.result}\n\n${result.details || ''}`,
+        isErr, runId
+      );
+      return text(out);
+    }
+  );
+
+  mcp.registerTool(
+    'groovy_execute',
+    {
+      description: 'Execute a Groovy script on a HAC environment. Call list_environments first to check groovy execution is allowed. IMPORTANT: Before calling this tool, you MUST show the user the script and a clear explanation of what data it will modify or delete and explicitly ask for their confirmation. Only proceed after the user approves.',
+      inputSchema: {
+        environmentId: z.string().describe('Environment ID from list_environments'),
+        script: z.string().describe('Groovy script content'),
+        commit: z.boolean().optional().describe('Whether to commit the transaction (default: false)'),
+      },
+    },
+    async ({ environmentId, script, commit }) => {
+      const env = await getEnvironment(environmentId);
+      if (!env) {
+        mcpLog('groovy_execute', environmentId, 'Unknown environment', '', true);
+        return error(`Environment "${environmentId}" not found.`);
+      }
+      if (!env.allowGroovyExecution) {
+        mcpLog('groovy_execute', env.name, 'Groovy disabled', '', true);
+        return error(`Groovy execution is disabled for environment "${env.name}".`);
+      }
+
+      const scriptPreview = script.split('\n')[0].slice(0, 60);
+      const runId = mcpLogStart('groovy_execute', env.name, `${scriptPreview}…`);
+
+      let result;
+      try {
+        result = await withSession(env, s => groovyExecute(s, script, { commit }));
+      } catch (e) {
+        mcpLog('groovy_execute', env.name, `Error: ${e.message}`, e.stack || '', true, runId);
+        return error(e.message);
+      }
+
+      const isErr = !!result.stacktraceText;
+      let out = `**${env.name}** — ${isErr ? '❌ Error' : '✅ Success'}\n`;
+      if (result.executionResult != null) out += `\n**Result:**\n\`\`\`\n${result.executionResult}\n\`\`\``;
+      if (result.outputText) out += `\n**Output:**\n\`\`\`\n${result.outputText}\n\`\`\``;
+      if (result.stacktraceText) out += `\n**Stacktrace:**\n\`\`\`\n${result.stacktraceText}\n\`\`\``;
+
+      mcpLog('groovy_execute', env.name,
+        `${isErr ? '❌' : '✅'} ${scriptPreview}…`,
+        `Script:\n${script}\n\nResult: ${result.executionResult}\n\n${result.stacktraceText || ''}`,
         isErr, runId
       );
       return text(out);
