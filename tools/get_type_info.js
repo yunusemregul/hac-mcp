@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { flexibleSearch } from '../hac.js';
-import { withSession, getEnvironment, mcpLogStart, mcpLog, text, error } from './context.js';
+import { withSession, getEnvironment, isTruthy, mcpLogStart, mcpLog, text, error } from './context.js';
 
 const TOOL = 'get_type_info';
 
@@ -14,7 +14,10 @@ export const tool = {
   },
   handler: async ({ environmentId, typeCode, includeInherited }) => {
     const env = await getEnvironment(environmentId);
-    if (!env) return error(`Environment "${environmentId}" not found.`);
+    if (!env) {
+      mcpLog({ tool: TOOL, envName: environmentId, preview: 'Unknown environment', isError: true });
+      return error(`Environment "${environmentId}" not found.`);
+    }
 
     const runId = mcpLogStart({ tool: TOOL, envName: env.name, preview: `Type info: ${typeCode}` });
 
@@ -137,8 +140,6 @@ export const tool = {
         if (r.resultList) for (const [tpk, tcode] of r.resultList) scalarRefTypes[String(tpk)] = tcode;
       } catch (_) {}
     }
-
-    const isTruthy = v => v === true || v === 'true' || v === 1 || v === '1';
 
     let out = `Type: ${code}`;
     if (supertypeName) out += ` (extends ${supertypeName})`;

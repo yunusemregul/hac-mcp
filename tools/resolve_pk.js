@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { flexibleSearch, pkAnalyze } from '../hac.js';
-import { withSession, getEnvironment, mcpLogStart, mcpLog, text, error } from './context.js';
+import { withSession, getEnvironment, isTruthy, mcpLogStart, mcpLog, text, error } from './context.js';
 
 const TOOL = 'resolve_pk';
 
@@ -13,8 +13,14 @@ export const tool = {
   },
   handler: async ({ environmentId, pk }) => {
     const env = await getEnvironment(environmentId);
-    if (!env) return error(`Environment "${environmentId}" not found.`);
-    if (!env.allowFlexSearch) return error(`FlexibleSearch is disabled for environment "${env.name}".`);
+    if (!env) {
+      mcpLog({ tool: TOOL, envName: environmentId, preview: 'Unknown environment', isError: true });
+      return error(`Environment "${environmentId}" not found.`);
+    }
+    if (!env.allowFlexSearch) {
+      mcpLog({ tool: TOOL, envName: env.name, preview: 'FlexSearch disabled', isError: true });
+      return error(`FlexibleSearch is disabled for environment "${env.name}".`);
+    }
 
     const runId = mcpLogStart({ tool: TOOL, envName: env.name, preview: `Resolving PK ${pk}…` });
 
@@ -27,6 +33,7 @@ export const tool = {
     }
 
     if (analysis.possibleException) {
+      mcpLog({ tool: TOOL, envName: env.name, preview: `Invalid PK ${pk}`, detail: analysis.possibleException, isError: true, runId });
       return error(`Invalid PK ${pk}: ${analysis.possibleException}`);
     }
 
@@ -45,7 +52,6 @@ export const tool = {
             `SELECT {qualifier}, {unique} FROM {AttributeDescriptor} WHERE {enclosingtype} = '${typePK}'`,
             { maxCount: 200 }
           ));
-          const isTruthy = v => v === true || v === 'true' || v === 1 || v === '1';
           uniqueFields = (attrResult.resultList || [])
             .filter(([, isUnique]) => isTruthy(isUnique))
             .map(([q]) => q);

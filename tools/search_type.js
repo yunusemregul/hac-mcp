@@ -12,7 +12,10 @@ export const tool = {
   },
   handler: async ({ environmentId, query }) => {
     const env = await getEnvironment(environmentId);
-    if (!env) return error(`Environment "${environmentId}" not found.`);
+    if (!env) {
+      mcpLog({ tool: TOOL, envName: environmentId, preview: 'Unknown environment', isError: true });
+      return error(`Environment "${environmentId}" not found.`);
+    }
 
     const runId = mcpLogStart({ tool: TOOL, envName: env.name, preview: `Searching "${query}"…` });
 

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { flexibleSearch } from '../hac.js';
-import { withSession, getEnvironment, getTypeIndex, fuzzySearch, mcpLogStart, mcpLog, text, error } from './context.js';
+import { withSession, getEnvironment, getTypeIndex, fuzzySearch, isTruthy, mcpLogStart, mcpLog, text, error } from './context.js';
 
 const TOOL = 'flexible_search';
 
@@ -48,7 +48,6 @@ export async function fetchScalarFields(env, typeCode) {
       if (r.resultList) for (const [tpk, tcode] of r.resultList) refTypes[String(tpk)] = tcode;
     }
 
-    const isTruthy = v => v === true || v === 'true' || v === 1 || v === '1';
     return scalar.map(([q,, attrTypePK, isUnique]) => {
       const refType = attrTypePK ? refTypes[String(attrTypePK)] : null;
       let s = q;

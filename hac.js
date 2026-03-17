@@ -36,6 +36,8 @@ function getAgent(hostname) {
   return agentCache[hostname];
 }
 
+const HTTP_TIMEOUT_MS = 30_000;
+
 function httpRequest(options, body = null) {
   return new Promise((resolve, reject) => {
     const t0 = Date.now();
@@ -47,6 +49,9 @@ function httpRequest(options, body = null) {
         log('http', `${envTag}${options.method} ${options.path} → ${res.statusCode} (${Date.now() - t0}ms)`);
         resolve({ status: res.statusCode, headers: res.headers, body: data });
       });
+    });
+    req.setTimeout(HTTP_TIMEOUT_MS, () => {
+      req.destroy(new Error(`Request timed out after ${HTTP_TIMEOUT_MS}ms`));
     });
     req.on('error', err => {
       const envTag = options._envName ? `[${options._envName}] ` : '';

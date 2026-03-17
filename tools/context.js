@@ -71,11 +71,16 @@ async function getTypeIndex(env) {
   return getIndex(env.id, (query, opts) => withSession(env, s => flexibleSearch(s, query, opts)));
 }
 
+// ─── Shared utilities ─────────────────────────────────────────────────────────
+// FlexibleSearch returns booleans as true/false, 1/0, or 'true'/'false' strings
+const isTruthy = v => v === true || v === 'true' || v === 1 || v === '1';
+
 // ─── Response helpers ─────────────────────────────────────────────────────────
 function text(t) { return { content: [{ type: 'text', text: t }] }; }
 function error(msg) { return { content: [{ type: 'text', text: `**Error:** ${msg}` }], isError: true }; }
 
 export {
+  isTruthy,
   getSession,
   withSession,
   getEnvironment,
