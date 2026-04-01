@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { flexibleSearch } from '../hac.js';
+import { optionalLooseBool } from './zodLoose.js';
 import { withSession, getEnvironment, isTruthy, mcpLogStart, mcpLog, text, error } from './context.js';
 
 const TOOL = 'get_type_info';
@@ -9,22 +10,29 @@ export const tool = {
   description: 'Get metadata and queryable fields for a SAP Commerce type. Use this when a FlexibleSearch query fails with unknown field errors to discover the correct field qualifiers.',
   inputSchema: {
     environmentId: z.string().describe('Environment ID from list_environments'),
-    typeCode: z.string().describe('Type code to look up, e.g. SolrFacetSearchConfig, Order, Product'),
-    includeInherited: z.boolean().optional().describe('Also include attributes inherited from supertypes (default false)'),
+    typeCode: z.string().optional().describe('Type code to look up, e.g. SolrFacetSearchConfig, Order, Product'),
+    type: z.string().optional().describe('Alias for typeCode if the client sends this key instead'),
+    includeInherited: optionalLooseBool().describe('Also include attributes inherited from supertypes (default false)'),
   },
-  handler: async ({ environmentId, typeCode, includeInherited }) => {
+  handler: async ({ environmentId, typeCode, type: typeArg, includeInherited }) => {
     const env = await getEnvironment(environmentId);
     if (!env) {
       mcpLog({ tool: TOOL, envName: environmentId, preview: 'Unknown environment', isError: true });
       return error(`Environment "${environmentId}" not found.`);
     }
 
-    const runId = mcpLogStart({ tool: TOOL, envName: env.name, preview: `Type info: ${typeCode}` });
+    const resolvedType = typeCode ?? typeArg;
+    if (!resolvedType) {
+      mcpLog({ tool: TOOL, envName: env.name, preview: 'Missing typeCode', isError: true });
+      return error('Provide typeCode (or type) with the Commerce type code.');
+    }
+
+    const runId = mcpLogStart({ tool: TOOL, envName: env.name, preview: `Type info: ${resolvedType}` });
 
     let typeResult;
     try {
       typeResult = await withSession(env, s => flexibleSearch(s,
-        `SELECT {pk}, {code}, {supertype}, {jaloclass}, {inheritancepathstring}, {extensionname}, {catalogitemtype}, {singleton} FROM {ComposedType} WHERE {code} = '${typeCode}'`
+        `SELECT {pk}, {code}, {supertype}, {jaloclass}, {inheritancepathstring}, {extensionname}, {catalogitemtype}, {singleton} FROM {ComposedType} WHERE {code} = '${resolvedType}'`
       ));
     } catch (e) {
       mcpLog({ tool: TOOL, envName: env.name, preview: `Error: ${e.message}`, isError: true, runId });
@@ -39,8 +47,8 @@ export const tool = {
     }
 
     if (!typeResult.resultList?.length) {
-      mcpLog({ tool: TOOL, envName: env.name, preview: `Type not found: ${typeCode}`, isError: true, runId });
-      return error(`Type "${typeCode}" not found. Check the type code (case-sensitive).`);
+      mcpLog({ tool: TOOL, envName: env.name, preview: `Type not found: ${resolvedType}`, isError: true, runId });
+      return error(`Type "${resolvedType}" not found. Check the type code (case-sensitive).`);
     }
 
     const [pk, code, supertypePK, , inheritancePath] = typeResult.resultList[0];

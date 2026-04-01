@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { groovyExecute } from '../hac.js';
+import { optionalLooseBool } from './zodLoose.js';
 import { withSession, getEnvironment, mcpLogStart, mcpLog, text, error } from './context.js';
 
 const TOOL = 'groovy_execute';
@@ -10,7 +11,7 @@ export const tool = {
   inputSchema: {
     environmentId: z.string().describe('Environment ID from list_environments'),
     script: z.string().describe('Groovy script content'),
-    commit: z.boolean().optional().describe('Whether to commit the transaction (default: false)'),
+    commit: optionalLooseBool().describe('Whether to commit the transaction (default: false)'),
   },
   handler: async ({ environmentId, script, commit }) => {
     const env = await getEnvironment(environmentId);

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { flexibleSearch, impexImport } from '../hac.js';
+import { optionalLooseBool } from './zodLoose.js';
 import { withSession, getEnvironment, mcpLogStart, mcpLog, text, error } from './context.js';
 import { fetchScalarFields } from './flexible_search.js';
 
@@ -100,10 +101,10 @@ export const tool = {
     impexContent: z.string().optional().describe('ImpEx script content (alias for script)'),
     validationEnum: z.enum(['IMPORT_STRICT', 'IMPORT_RELAXED']).optional(),
     maxThreads: z.number().optional(),
-    legacyMode: z.boolean().optional(),
-    enableCodeExecution: z.boolean().optional(),
-    distributedMode: z.boolean().optional(),
-    sldEnabled: z.boolean().optional(),
+    legacyMode: optionalLooseBool(),
+    enableCodeExecution: optionalLooseBool(),
+    distributedMode: optionalLooseBool(),
+    sldEnabled: optionalLooseBool(),
   },
   handler: async ({ environmentId, script: scriptArg, impexContent, validationEnum, maxThreads, legacyMode, enableCodeExecution, distributedMode, sldEnabled }) => {
     const script = scriptArg ?? impexContent;
