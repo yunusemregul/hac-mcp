@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { tool as listEnvironments } from './list_environments.js';
 import { tool as flexibleSearch } from './flexible_search.js';
 import { tool as searchType } from './search_type.js';
@@ -19,7 +20,7 @@ const tools = [
 ];
 
 export function registerAllTools(mcp) {
-  for (const { name, description, inputSchema, handler } of tools) {
-    mcp.registerTool(name, { description, ...(inputSchema && { inputSchema }) }, handler);
+  for (const { name, description, handler } of tools) {
+    mcp.registerTool(name, { description, inputSchema: z.object({}).passthrough() }, handler);
   }
 }

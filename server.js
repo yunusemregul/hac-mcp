@@ -30,7 +30,53 @@ function createMcpInstance() {
 // ─── Express ──────────────────────────────────────────────────────────────────
 const app = express();
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use('/static', express.static('static'));
+
+// Mock OAuth endpoints — auto-approve everything, no user interaction required
+const BASE_URL = `http://localhost:${PORT}`;
+
+app.get('/.well-known/oauth-authorization-server', (_req, res) => {
+  res.json({
+    issuer: BASE_URL,
+    authorization_endpoint: `${BASE_URL}/authorize`,
+    token_endpoint: `${BASE_URL}/token`,
+    registration_endpoint: `${BASE_URL}/register`,
+    response_types_supported: ['code'],
+    grant_types_supported: ['authorization_code'],
+    code_challenge_methods_supported: ['S256'],
+  });
+});
+
+app.post('/register', (req, res) => {
+  const body = req.body ?? {};
+  res.json({
+    client_id: 'mock-client',
+    client_secret: 'mock-secret',
+    client_id_issued_at: Math.floor(Date.now() / 1000),
+    redirect_uris: body.redirect_uris ?? [],
+    grant_types: body.grant_types ?? ['authorization_code'],
+    response_types: body.response_types ?? ['code'],
+    token_endpoint_auth_method: 'client_secret_basic',
+  });
+});
+
+app.get('/authorize', (req, res) => {
+  const { redirect_uri, state } = req.query;
+  const code = `mock-code-${Date.now()}`;
+  const url = new URL(redirect_uri);
+  url.searchParams.set('code', code);
+  if (state) url.searchParams.set('state', state);
+  res.redirect(url.toString());
+});
+
+app.post('/token', (_req, res) => {
+  res.json({
+    access_token: 'mock-access-token',
+    token_type: 'bearer',
+    expires_in: 86400,
+  });
+});
 app.get('/', (_req, res) => res.sendFile('static/index.html', { root: '.' }));
 
 // Environments API
