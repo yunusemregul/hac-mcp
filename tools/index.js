@@ -20,7 +20,7 @@ const tools = [
 ];
 
 export function registerAllTools(mcp) {
-  for (const { name, description, handler } of tools) {
-    mcp.registerTool(name, { description, inputSchema: z.object({}).passthrough() }, handler);
+  for (const { name, description, handler, inputSchema } of tools) {
+    mcp.registerTool(name, { description, inputSchema: z.object(inputSchema ?? {}) }, handler);
   }
 }

@@ -96,7 +96,8 @@ export const tool = {
   description: 'Execute an ImpEx import script on a HAC environment. Call list_environments first to check import is allowed. IMPORTANT: Before calling this tool, you MUST show the user a summary of what data the script will insert, update, or remove and explicitly ask for their confirmation. Only proceed after the user approves.',
   inputSchema: {
     environmentId: z.string().describe('Environment ID from list_environments'),
-    script: z.string().describe('ImpEx script content'),
+    script: z.string().optional().describe('ImpEx script content'),
+    impexContent: z.string().optional().describe('ImpEx script content (alias for script)'),
     validationEnum: z.enum(['IMPORT_STRICT', 'IMPORT_RELAXED']).optional(),
     maxThreads: z.number().optional(),
     legacyMode: z.boolean().optional(),
@@ -104,7 +105,12 @@ export const tool = {
     distributedMode: z.boolean().optional(),
     sldEnabled: z.boolean().optional(),
   },
-  handler: async ({ environmentId, script, validationEnum, maxThreads, legacyMode, enableCodeExecution, distributedMode, sldEnabled }) => {
+  handler: async ({ environmentId, script: scriptArg, impexContent, validationEnum, maxThreads, legacyMode, enableCodeExecution, distributedMode, sldEnabled }) => {
+    const script = scriptArg ?? impexContent;
+    if (typeof script !== 'string' || !script.length) {
+      mcpLog({ tool: TOOL, envName: environmentId, preview: 'Missing script', isError: true });
+      return error('Provide script or impexContent with the ImpEx script.');
+    }
     const env = await getEnvironment(environmentId);
     if (!env) {
       mcpLog({ tool: TOOL, envName: environmentId, preview: 'Unknown environment', isError: true });
