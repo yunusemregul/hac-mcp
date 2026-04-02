@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { flexibleSearch } from '../hac.js';
 import { withSession, getEnvironment, getTypeIndex, fuzzySearch, isTruthy, mcpLogStart, mcpLog, text, error } from './context.js';
+import { optionalLooseNumber } from './zodLoose.js';
 
 const TOOL = 'flexible_search';
 
@@ -60,11 +61,11 @@ export async function fetchScalarFields(env, typeCode) {
 
 export const tool = {
   name: TOOL,
-  description: 'Execute a FlexibleSearch query on a HAC environment. Call list_environments first to get valid IDs.',
+  description: 'Execute a FlexibleSearch query on a HAC environment. Call list_environments first to get valid IDs. IMPORTANT: The database is MSSQL — do NOT use LIMIT, TOP, or OFFSET in queries; use the maxCount parameter to limit rows instead.',
   inputSchema: {
     environmentId: z.string().describe('Environment ID from list_environments'),
     query: z.string().describe('FlexibleSearch query, e.g. SELECT {pk}, {uid} FROM {User}'),
-    maxCount: z.number().optional().describe('Max rows to return (default 200)'),
+    maxCount: optionalLooseNumber().describe('Max rows to return (default 200)'),
     locale: z.string().optional().describe('Locale (default en)'),
     dataSource: z.string().optional().describe('Data source (default master)'),
   },
@@ -81,6 +82,12 @@ export const tool = {
 
     const preview = `${query.slice(0, 60)}${query.length > 60 ? '…' : ''}`;
     const runId = mcpLogStart({ tool: TOOL, envName: env.name, preview });
+
+    if (/\bLIMIT\b/i.test(query)) {
+      const msg = 'Do not use LIMIT in FlexibleSearch queries — the database is MSSQL. Use the maxCount parameter to limit rows.';
+      mcpLog({ tool: TOOL, envName: env.name, preview: 'Query error', detail: msg, isError: true, runId });
+      return error(`Query error: ${msg}`);
+    }
 
     let result;
     try {
@@ -120,6 +127,12 @@ export const tool = {
         } catch (_) {}
         mcpLog({ tool: TOOL, envName: env.name, preview: 'Query error', detail, isError: true, runId });
         return error(`Query error: ${detail}`);
+      }
+
+      if (/TOP.*OFFSET|OFFSET.*TOP/i.test(msg)) {
+        const topMsg = 'Do not use TOP in FlexibleSearch queries — it conflicts with the pagination OFFSET that HAC adds internally. Use the maxCount parameter to limit rows instead.';
+        mcpLog({ tool: TOOL, envName: env.name, preview: 'Query error', detail: topMsg, isError: true, runId });
+        return error(`Query error: ${topMsg}`);
       }
 
       mcpLog({ tool: TOOL, envName: env.name, preview: 'Query error', detail: rawDetail, isError: true, runId });
