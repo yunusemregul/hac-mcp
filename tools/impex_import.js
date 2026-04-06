@@ -94,7 +94,8 @@ function formatImpexDetails(details) {
 
 export const tool = {
   name: TOOL,
-  description: 'Execute an ImpEx import script on a HAC environment. Call list_environments first to check import is allowed. IMPORTANT: Before calling this tool, you MUST show the user a summary of what data the script will insert, update, or remove and explicitly ask for their confirmation. Only proceed after the user approves.',
+  category: 'write',
+  description: 'Execute an ImpEx import script on a HAC environment. Call list_environments first to check import is allowed. IMPORTANT: Before calling this tool, you MUST show the user a summary of what data the script will insert, update, or remove and explicitly ask for their confirmation. Only proceed after the user approves and set confirmed_by_user to true.',
   inputSchema: {
     environmentId: z.string().describe('Environment ID from list_environments'),
     script: z.string().optional().describe('ImpEx script content'),
@@ -105,8 +106,12 @@ export const tool = {
     enableCodeExecution: optionalLooseBool(),
     distributedMode: optionalLooseBool(),
     sldEnabled: optionalLooseBool(),
+    confirmed_by_user: z.boolean().describe('Must be true — user has explicitly reviewed and approved this script. The server will reject the call if false.'),
   },
-  handler: async ({ environmentId, script: scriptArg, impexContent, validationEnum, maxThreads, legacyMode, enableCodeExecution, distributedMode, sldEnabled }) => {
+  handler: async ({ environmentId, script: scriptArg, impexContent, validationEnum, maxThreads, legacyMode, enableCodeExecution, distributedMode, sldEnabled, confirmed_by_user }) => {
+    if (!confirmed_by_user) {
+      return error('User confirmation required. Show the user the ImpEx script and what it will insert, update, or remove, ask for explicit approval, then retry with confirmed_by_user: true.');
+    }
     const script = scriptArg ?? impexContent;
     if (typeof script !== 'string' || !script.length) {
       mcpLog({ tool: TOOL, envName: environmentId, preview: 'Missing script', isError: true });

@@ -1,14 +1,19 @@
 import express from 'express';
 import { createServer } from 'http';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+import { homedir } from 'os';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { flexibleSearch, setHacLogger } from './hac.js';
 import { listEnvironments, getEnvironment, createEnvironment, updateEnvironment, deleteEnvironment } from './storage.js';
 import { getIndex } from './type-index.js';
-import { registerAllTools } from './tools/index.js';
+import { registerAllTools, tools as allTools } from './tools/index.js';
 import { getSession, withSession, attachLogClient, detachLogClient, getMcpLogBuffer } from './tools/context.js';
 
-const PORT = process.env.PORT || 3333;
+const PORT = process.env.PORT || 18432;
 
 // ─── HAC request log → SSE broadcast ─────────────────────────────────────────
 const hacLogClients = new Set();
@@ -31,7 +36,7 @@ function createMcpInstance() {
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use('/static', express.static('static'));
+app.use('/static', express.static(join(__dirname, 'static')));
 
 // Mock OAuth endpoints — auto-approve everything, no user interaction required
 const BASE_URL = `http://localhost:${PORT}`;
@@ -77,7 +82,7 @@ app.post('/token', (_req, res) => {
     expires_in: 86400,
   });
 });
-app.get('/', (_req, res) => res.sendFile('static/index.html', { root: '.' }));
+app.get('/', (_req, res) => res.sendFile(join(__dirname, 'static', 'index.html')));
 
 // Environments API
 app.get('/api/environments', async (_req, res) => res.json(await listEnvironments()));
@@ -102,6 +107,23 @@ app.post('/api/environments/:id/refresh-index', async (req, res) => {
     res.json({ ok: true, count: types.length });
   } catch (e) {
     res.json({ ok: false, error: e.message });
+  }
+});
+
+app.post('/api/test-connection', async (req, res) => {
+  let { url, username, password } = req.body;
+  if (!url || !username || !password) return res.json({ ok: false, error: 'URL, username and password are required' });
+  if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+  try {
+    await getSession({ id: '__probe__', url, username, password, name: url });
+    res.json({ ok: true });
+  } catch (e) {
+    const msg = e.message || '';
+    console.error('[test-connection] error:', e);
+    const type = e.code === 'ERR_INVALID_URL' ? 'invalid_url'
+      : (msg.includes('Login failed') || msg.includes('CSRF token') || msg.includes('credentials')) ? 'auth'
+      : 'network';
+    res.json({ ok: false, error: msg, type });
   }
 });
 
@@ -138,6 +160,27 @@ app.get('/api/mcp-log', (req, res) => {
   req.on('close', () => detachLogClient(res));
 });
 
+// Manifest API
+app.get('/api/manifest', (_req, res) => {
+  res.json({
+    name: 'hac-mcp',
+    version: '1.0.0',
+    description: 'SAP Commerce Cloud HAC — MCP Server',
+    tools: allTools.map(t => ({
+      name: t.name,
+      category: t.category ?? 'utility',
+      description: t.description,
+      params: t.inputSchema ? Object.keys(t.inputSchema) : [],
+    })),
+  });
+});
+
+// Status API
+app.get('/api/status', async (_req, res) => {
+  const environments = await listEnvironments();
+  res.json({ environmentCount: environments.length, connectedClients: mcpSessions.size });
+});
+
 // MCP SSE
 const mcpSessions = new Map();
 app.get('/mcp/sse', async (_req, res) => {
@@ -155,6 +198,46 @@ app.post('/mcp/messages', async (req, res) => {
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 createServer(app).listen(PORT, () => {
-  console.log(`HAC MCP running at http://localhost:${PORT}`);
-  console.log(`MCP SSE endpoint: http://localhost:${PORT}/mcp/sse`);
+  const base = `http://localhost:${PORT}`;
+  const hasColor = process.stdout.hasColors?.() ?? process.stdout.isTTY;
+  const c = hasColor ? {
+    reset:  '\x1b[0m',
+    bold:   '\x1b[1m',
+    dim:    '\x1b[2m',
+    green:  '\x1b[32m',
+    cyan:   '\x1b[36m',
+    white:  '\x1b[97m',
+  } : { reset: '', bold: '', dim: '', green: '', cyan: '', white: '' };
+
+  // helpers
+  const label = s => `${c.dim}${s}${c.reset}`;
+  const value = s => `${c.cyan}${s}${c.reset}`;
+  const heading = s => `${c.bold}${c.white}${s}${c.reset}`;
+  const code = s => `${c.green}${s}${c.reset}`;
+
+  console.log('');
+  console.log(`  ${c.bold}${c.green}HAC MCP is running${c.reset}`);
+  console.log('');
+  console.log(`  ${label('Web UI      ')}  ${value(base)}`);
+  console.log(`  ${label('MCP endpoint')}  ${value(`${base}/mcp/sse`)}`);
+  console.log(`  ${label('Config file ')}  ${value(join(homedir(), '.hac-mcp', 'environments.json'))}`);
+  console.log('');
+  console.log(`  ${label('Open the Web UI to add and manage your HAC environments.')}`);
+  console.log('');
+  console.log(`  ${heading('Claude Code')}`);
+  console.log(`  ${label('Run this command to register:')}`);
+  console.log('');
+  console.log(`  ${code(`claude mcp add --transport sse hac-mcp ${base}/mcp/sse`)}`);
+  console.log('');
+  console.log(`  ${heading('Other MCP Clients')}`);
+  console.log(`  ${label('Add the following to your MCP client config:')}`);
+  console.log('');
+  console.log(`  ${c.cyan}{${c.reset}`);
+  console.log(`  ${c.cyan}  "mcpServers": {${c.reset}`);
+  console.log(`  ${code('    "hac-mcp": {')}`);
+  console.log(`  ${code(`      "url": "${base}/mcp/sse"`)}`);
+  console.log(`  ${code('    }')}`);
+  console.log(`  ${c.cyan}  }${c.reset}`);
+  console.log(`  ${c.cyan}}${c.reset}`);
+  console.log('');
 });

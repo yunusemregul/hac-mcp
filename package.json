@@ -3,9 +3,20 @@
   "version": "1.0.0",
   "type": "module",
   "main": "server.js",
+  "bin": {
+    "hac-mcp": "bin/hac-mcp.js"
+  },
+  "files": [
+    "bin",
+    "tools",
+    "static",
+    "server.js",
+    "hac.js",
+    "storage.js",
+    "type-index.js"
+  ],
   "scripts": {
-    "start": "node server.js",
-    "restart": "pm2 restart hac-mcp"
+    "start": "node server.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",

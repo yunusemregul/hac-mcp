@@ -42,6 +42,7 @@ function decodeTextBytes(bytes) {
 
 export const tool = {
   name: TOOL,
+  category: 'read',
   description: 'Read the text content of a SAP Commerce MediaModel by its PK. Only supports text/plain media.',
   inputSchema: {
     environmentId: z.string().describe('Environment ID from list_environments'),

@@ -6,6 +6,7 @@ const TOOL = 'read_property';
 
 export const tool = {
   name: TOOL,
+  category: 'read',
   description: 'Search HAC configuration properties by key or value. Returns matching key-value pairs from the platform configuration page.',
   inputSchema: {
     environmentId: z.string().describe('Environment ID from list_environments'),

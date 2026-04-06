@@ -7,13 +7,18 @@ const TOOL = 'groovy_execute';
 
 export const tool = {
   name: TOOL,
-  description: 'Execute a Groovy script on a HAC environment. Call list_environments first to check groovy execution is allowed. IMPORTANT: Before calling this tool, you MUST show the user the script and a clear explanation of what data it will modify or delete and explicitly ask for their confirmation. Only proceed after the user approves.',
+  category: 'write',
+  description: 'Execute a Groovy script on a HAC environment. Call list_environments first to check groovy execution is allowed. IMPORTANT: Before calling this tool, you MUST show the user the script and a clear explanation of what it does and explicitly ask for their confirmation. Only proceed after the user approves and set confirmed_by_user to true. Note: even with commit disabled, scripts can send emails, trigger SMS, or call external APIs.',
   inputSchema: {
     environmentId: z.string().describe('Environment ID from list_environments'),
     script: z.string().describe('Groovy script content'),
     commit: optionalLooseBool().describe('Whether to commit the transaction (default: false)'),
+    confirmed_by_user: z.boolean().describe('Must be true — user has explicitly reviewed and approved this script. The server will reject the call if false.'),
   },
-  handler: async ({ environmentId, script, commit }) => {
+  handler: async ({ environmentId, script, commit, confirmed_by_user }) => {
+    if (!confirmed_by_user) {
+      return error('User confirmation required. Show the user the script and what it does, ask for explicit approval, then retry with confirmed_by_user: true.');
+    }
     const env = await getEnvironment(environmentId);
     if (!env) {
       mcpLog({ tool: TOOL, envName: environmentId, preview: 'Unknown environment', isError: true });

@@ -61,6 +61,7 @@ export async function fetchScalarFields(env, typeCode) {
 
 export const tool = {
   name: TOOL,
+  category: 'read',
   description: 'Execute a FlexibleSearch query on a HAC environment. Call list_environments first to get valid IDs. IMPORTANT: The database is MSSQL — do NOT use LIMIT, TOP, or OFFSET in queries; use the maxCount parameter to limit rows instead.',
   inputSchema: {
     environmentId: z.string().describe('Environment ID from list_environments'),

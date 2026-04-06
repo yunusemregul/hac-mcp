@@ -23,12 +23,17 @@ def endTime = cronJob.endTime
 
 export const tool = {
   name: TOOL,
-  description: 'Run a SAP Commerce CronJob synchronously by its PK and wait for it to finish. Returns the final status and result.',
+  category: 'write',
+  description: 'Run a SAP Commerce CronJob synchronously by its PK and wait for it to finish. Returns the final status and result. IMPORTANT: Before calling this tool, you MUST tell the user which CronJob will run and what it does (e.g. sending emails, syncing data, triggering workflows) and explicitly ask for their confirmation. Only proceed after the user approves and set confirmed_by_user to true.',
   inputSchema: {
     environmentId: z.string().describe('Environment ID from list_environments'),
     cronJobPk: z.string().describe('PK of the CronJob to run'),
+    confirmed_by_user: z.boolean().describe('Must be true — user has explicitly reviewed which CronJob will run and approved. The server will reject the call if false.'),
   },
-  handler: async ({ environmentId, cronJobPk }) => {
+  handler: async ({ environmentId, cronJobPk, confirmed_by_user }) => {
+    if (!confirmed_by_user) {
+      return error('User confirmation required. Tell the user which CronJob will run and what it does, ask for explicit approval, then retry with confirmed_by_user: true.');
+    }
     const env = await getEnvironment(environmentId);
     if (!env) {
       mcpLog({ tool: TOOL, envName: environmentId, preview: 'Unknown environment', isError: true });

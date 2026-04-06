@@ -5,6 +5,7 @@ const TOOL = 'search_type';
 
 export const tool = {
   name: TOOL,
+  category: 'read',
   description: 'Search for SAP Commerce type names by fuzzy match. Use this before get_type_info when you are unsure of the exact type code.',
   inputSchema: {
     environmentId: z.string().describe('Environment ID from list_environments'),

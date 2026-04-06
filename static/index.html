@@ -7,21 +7,36 @@
 <link rel="stylesheet" href="/static/style.css"/>
 </head>
 <body>
-<h1>HAC MCP</h1>
-<p class="subtitle">Environment manager &nbsp;·&nbsp; MCP endpoint: <code id="mcpEndpoint"></code></p>
+<div class="topbar">
+  <div>
+    <h1>HAC MCP</h1>
+    <p class="subtitle">Environment manager</p>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px">
+  <button class="btn-theme" id="btnTheme" onclick="toggleTheme()" title="Toggle theme"></button>
+  <button class="btn-manifest" onclick="showManifest()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+    View Tools Manifest
+  </button>
+  <button class="btn-setup" onclick="showModal()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+    Setup Guide
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:.5"><path d="M9 18l6-6-6-6"/></svg>
+  </button>
+  </div>
+</div>
 
 <div class="layout">
-  <!-- Left: environments + logs -->
+  <!-- Environments + logs -->
   <div style="display:flex;flex-direction:column;gap:20px">
     <div class="card">
       <div class="card-header">
         <h2>Environments</h2>
-        <button class="btn-primary btn-sm" onclick="openForm()">+ Add</button>
+        <button class="btn-primary" id="btnAddEnv" onclick="openForm()">+ Add Environment</button>
       </div>
-      <div id="envList"><div class="empty">No environments yet.<br/>Add one using the form →</div></div>
+      <div id="envList"><div class="empty">No environments configured yet.<br/>Click <strong>+ Add</strong> to connect your first HAC instance.</div></div>
     </div>
 
-    <!-- MCP log panel -->
     <div class="card">
       <div class="card-header">
         <h2><span class="log-dot" id="logDot"></span>MCP Activity Log</h2>
@@ -30,7 +45,6 @@
       <div id="logList" class="log-list"><div class="empty" style="padding:20px">No activity yet.</div></div>
     </div>
 
-    <!-- HAC request log panel -->
     <div class="card">
       <div class="card-header">
         <h2><span class="log-dot" id="hacLogDot"></span>HAC Request Log</h2>
@@ -40,58 +54,152 @@
     </div>
   </div>
 
-  <!-- Right: add/edit form -->
-  <div class="card" id="formCard" style="display:none">
-    <div class="card-header"><h2 id="formTitle">Add Environment</h2></div>
-    <div class="card-body">
-      <input type="hidden" id="editId"/>
-      <label>Name</label>
-      <input type="text" id="fName" placeholder="Production / Local DEV…"/>
-      <label>Description</label>
-      <input type="text" id="fDesc" placeholder="Optional notes"/>
-      <label>HAC URL</label>
-      <input type="url" id="fUrl" placeholder="https://host:9002 or https://host/hac/"/>
-      <label>Username</label>
-      <input type="text" id="fUser" placeholder="admin"/>
-      <label>Password</label>
-      <input type="password" id="fPass" placeholder="••••••••"/>
-      <label>DB Dialect</label>
-      <select id="fDbType">
-        <option value="">Unknown</option>
-        <option value="MSSQL" selected>MSSQL</option>
-        <option value="MySQL">MySQL</option>
-        <option value="Oracle">Oracle</option>
-        <option value="SAP HANA">SAP HANA</option>
-        <option value="HSQLDB">HSQLDB</option>
-      </select>
-      <label style="margin-top:16px">Access rights</label>
-      <div class="toggle-group">
-        <div class="toggle-item">
-          <span class="toggle-label">FlexibleSearch</span>
-          <label class="toggle"><input type="checkbox" id="fFlex" checked/><span class="slider"></span></label>
-        </div>
-        <div class="toggle-item">
-          <span class="toggle-label">ImpEx Import</span>
-          <label class="toggle"><input type="checkbox" id="fImpex" checked/><span class="slider"></span></label>
-        </div>
-        <div class="toggle-item">
-          <span class="toggle-label">Groovy Execution</span>
-          <label class="toggle"><input type="checkbox" id="fGroovy" checked onchange="document.getElementById('groovyCommitRow').style.display=this.checked?'':'none'"/><span class="slider"></span></label>
-        </div>
-        <div class="toggle-item" id="groovyCommitRow">
-          <span class="toggle-label">Groovy Commit Mode</span>
-          <label class="toggle"><input type="checkbox" id="fGroovyCommit" checked/><span class="slider"></span></label>
-        </div>
-        <div class="toggle-item">
-          <span class="toggle-label">Read Property</span>
-          <label class="toggle"><input type="checkbox" id="fReadProperty" checked/><span class="slider"></span></label>
-        </div>
+  <!-- Status card -->
+  <div class="card" id="infoCard" style="align-self:start">
+    <div class="card-header">
+      <h2>Status</h2>
+    </div>
+    <div class="card-body" style="padding:16px 18px;display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <div class="status-pill" id="pillEnvs"><span class="status-dot inactive"></span><span id="pillEnvsLabel">0 environments</span></div>
+        <div class="status-pill" id="pillClients"><span class="status-dot inactive" id="clientDot"></span><span id="pillClientsLabel">0 clients connected</span></div>
       </div>
-      <div class="form-actions">
-        <button class="btn-ghost" onclick="closeForm()">Cancel</button>
-        <button class="btn-primary" onclick="saveEnv()">Save</button>
+      <div id="infoSetup">
+        <div style="margin-bottom:12px">
+          <div class="info-label">MCP Endpoint</div>
+          <div class="copyable"><code class="info-code" id="infoEndpoint"></code><button class="copy-btn" onclick="copyEl('infoEndpoint')">Copy</button></div>
+        </div>
+        <div style="margin-bottom:12px">
+          <div class="info-label">Claude Code</div>
+          <div class="copyable"><code class="info-code" id="infoClaudeCmd"></code><button class="copy-btn" onclick="copyEl('infoClaudeCmd')">Copy</button></div>
+        </div>
+        <div>
+          <div class="info-label">Other MCP Clients</div>
+          <div class="copyable"><pre class="info-pre" id="infoJson"></pre><button class="copy-btn" onclick="copyEl('infoJson')">Copy</button></div>
+        </div>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- Add/Edit environment modal -->
+<div class="modal-overlay" id="formOverlay" onclick="closeFormModal(event)">
+  <div class="modal modal-form">
+    <button class="modal-close" onclick="closeForm()">✕</button>
+    <div class="modal-header">
+      <div class="modal-logo" id="formTitle">Add Environment</div>
+    </div>
+    <input type="hidden" id="editId"/>
+    <label>Name <span class="required">*</span></label>
+    <input type="text" id="fName"/>
+    <div class="field-error" id="errName"></div>
+    <label>Description</label>
+    <input type="text" id="fDesc"/>
+    <label>HAC URL <span class="required">*</span></label>
+    <input type="url" id="fUrl"/>
+    <div id="urlTestStatus" style="display:none"></div>
+    <div class="field-error" id="errUrl"></div>
+    <label>Username <span class="required">*</span></label>
+    <input type="text" id="fUser" placeholder="admin"/>
+    <div class="field-error" id="errUser"></div>
+    <label>Password <span class="required">*</span></label>
+    <input type="password" id="fPass" placeholder="••••••••"/>
+    <div class="field-error" id="errPass"></div>
+    <label>DB Dialect</label>
+    <select id="fDbType">
+      <option value="MSSQL" selected>MSSQL</option>
+      <option value="MySQL">MySQL</option>
+    </select>
+    <div class="section-divider">Access Rights</div>
+    <div class="toggle-section-label">Read Only</div>
+    <div class="toggle-group">
+      <div class="toggle-item">
+        <div class="toggle-label">FlexibleSearch<span class="toggle-desc">Read-only queries</span></div>
+        <label class="toggle"><input type="checkbox" id="fFlex" checked/><span class="slider"></span></label>
+      </div>
+      <div class="toggle-item">
+        <div class="toggle-label">Read Property<span class="toggle-desc">Read platform config</span></div>
+        <label class="toggle"><input type="checkbox" id="fReadProperty" checked/><span class="slider"></span></label>
+      </div>
+    </div>
+    <div class="toggle-section-label" style="margin-top:12px">Mixed <span class="toggle-section-note">— may write</span></div>
+    <div class="toggle-group">
+      <div class="toggle-item warning">
+        <div class="toggle-label">Groovy Execution<span class="toggle-desc">Runs arbitrary code</span></div>
+        <label class="toggle"><input type="checkbox" id="fGroovy" onchange="toggleGroovyCommit(this.checked)"/><span class="slider"></span></label>
+      </div>
+      <div class="toggle-item danger" id="groovyCommitRow">
+        <div class="toggle-label">Groovy Commit Mode<span class="toggle-desc">Persists DB changes</span></div>
+        <label class="toggle"><input type="checkbox" id="fGroovyCommit" disabled onchange="updateGroovyNote()"/><span class="slider"></span></label>
+      </div>
+    </div>
+    <div class="toggle-note" id="groovyNote" style="display:none">⚠ Even with Commit Mode off, Groovy scripts can still interact with external systems — sending emails, SMS, calling APIs, or triggering workflows.</div>
+    <div class="toggle-section-label" style="margin-top:12px">Write</div>
+    <div class="toggle-group">
+      <div class="toggle-item danger">
+        <div class="toggle-label">ImpEx Import<span class="toggle-desc">Imports &amp; modifies data</span></div>
+        <label class="toggle"><input type="checkbox" id="fImpex"/><span class="slider"></span></label>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn-ghost" onclick="closeForm()">Cancel</button>
+      <button class="btn-primary" id="btnSave" onclick="saveEnv()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Onboarding modal -->
+<div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
+  <div class="modal">
+    <button class="modal-close" onclick="dismissModal()">✕</button>
+    <div class="modal-header">
+      <div class="modal-logo">HAC MCP</div>
+      <p class="modal-subtitle">SAP Commerce Cloud HAC — MCP Server</p>
+    </div>
+
+    <div class="modal-steps">
+      <div class="modal-step done">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <div class="step-title">Server is running</div>
+          <div class="step-desc">HAC MCP is up and listening for connections.</div>
+        </div>
+      </div>
+
+      <div class="modal-step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <div class="step-title">Connect your MCP client</div>
+          <div class="step-desc">Run this in your terminal to register with Claude Code:</div>
+          <code class="modal-code" id="modalClaudeCmd"></code>
+          <div class="step-desc" style="margin-top:12px">Or add this to your MCP client config:</div>
+          <pre class="modal-pre" id="modalJson"></pre>
+        </div>
+      </div>
+
+      <div class="modal-step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <div class="step-title">Add your first environment</div>
+          <div class="step-desc">Connect a HAC instance (local, staging, or production).</div>
+          <button class="btn-primary btn-sm" style="margin-top:10px" onclick="dismissModal();openForm()">+ Add Environment</button>
+        </div>
+      </div>
+    </div>
+
+    <button class="modal-dismiss" onclick="dismissModal()">Got it, don't show again</button>
+  </div>
+</div>
+
+<!-- Manifest modal -->
+<div class="modal-overlay" id="manifestOverlay" onclick="closeManifestModal(event)">
+  <div class="modal modal-manifest">
+    <button class="modal-close" onclick="closeManifest()">✕</button>
+    <div class="modal-header" style="margin-bottom:20px">
+      <div class="modal-logo" id="manifestTitle">HAC MCP</div>
+      <p class="modal-subtitle" id="manifestSubtitle">SAP Commerce Cloud HAC — MCP Server</p>
+    </div>
+    <div id="manifestTools"></div>
   </div>
 </div>
 

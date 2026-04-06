@@ -6,6 +6,7 @@ const TOOL = 'resolve_pk';
 
 export const tool = {
   name: TOOL,
+  category: 'read',
   description: 'Resolve a SAP Commerce PK to its type code and unique field values. Use this when a FlexibleSearch result contains an opaque PK and you need to know what item it refers to.',
   inputSchema: {
     environmentId: z.string().describe('Environment ID from list_environments'),

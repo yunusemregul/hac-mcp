@@ -6,6 +6,7 @@ const TOOL = 'list_cronjobs';
 
 export const tool = {
   name: TOOL,
+  category: 'read',
   description: 'List CronJobs on a SAP Commerce environment. Optionally filter by code (partial match). Returns pk, code, type, status, result, and last start/end times.',
   inputSchema: {
     environmentId: z.string().describe('Environment ID from list_environments'),

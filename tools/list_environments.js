@@ -4,6 +4,7 @@ const TOOL = 'list_environments';
 
 export const tool = {
   name: TOOL,
+  category: 'utility',
   description: 'List all configured HAC environments with their names, descriptions, and allowed operations.',
   handler: async () => {
     const runId = mcpLogStart({ tool: TOOL, envName: '', preview: 'Listing environments…' });

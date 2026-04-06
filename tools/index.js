@@ -27,6 +27,8 @@ const tools = [
   listCronjobs,
 ];
 
+export { tools };
+
 export function registerAllTools(mcp) {
   for (const { name, description, handler, inputSchema } of tools) {
     mcp.registerTool(name, { description, inputSchema: z.object(inputSchema ?? {}) }, handler);

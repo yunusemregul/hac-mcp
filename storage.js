@@ -1,8 +1,15 @@
-import { readFile, writeFile } from 'fs/promises';
+import { readFile, writeFile, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import { randomUUID } from 'crypto';
+import { join } from 'path';
+import { homedir } from 'os';
 
-const FILE = './environments.json';
+const DATA_DIR = join(homedir(), '.hac-mcp');
+const FILE = join(DATA_DIR, 'environments.json');
+
+async function ensureDataDir() {
+  await mkdir(DATA_DIR, { recursive: true });
+}
 
 async function load() {
   if (!existsSync(FILE)) return [];
@@ -10,6 +17,7 @@ async function load() {
 }
 
 async function save(envs) {
+  await ensureDataDir();
   await writeFile(FILE, JSON.stringify(envs, null, 2));
 }
 

@@ -61,10 +61,12 @@ modelService.save(target)
 
 export const tool = {
   name: TOOL,
-  description: 'Write text/plain content to a SAP Commerce MediaModel. If mediaPk is provided, overwrites the existing media stream. Otherwise creates a new media by inspecting the target item\'s field type, sets the stream, and assigns it back to the field. IMPORTANT: Before calling this tool, show the user what will be written and ask for confirmation.',
+  category: 'write',
+  description: 'Write text/plain content to a SAP Commerce MediaModel. If mediaPk is provided, overwrites the existing media stream. Otherwise creates a new media by inspecting the target item\'s field type, sets the stream, and assigns it back to the field. IMPORTANT: Before calling this tool, show the user what will be written and ask for confirmation. Set confirmed_by_user to true only after the user approves.',
   inputSchema: {
     environmentId: z.string().describe('Environment ID from list_environments'),
     content: z.string().describe('Text content to write (UTF-8)'),
+    confirmed_by_user: z.boolean().describe('Must be true — user has explicitly reviewed what will be written and approved. The server will reject the call if false.'),
     mediaPk: z.string().optional().describe('PK of an existing MediaModel to overwrite. If provided, targetPk/targetField are ignored.'),
     targetPk: z.string().optional().describe('PK of the item that owns the media field. Required when mediaPk is not provided.'),
     targetField: z.string().optional().describe('Attribute name on the target item (e.g. "content"). Used to determine media type and assign after creation.'),
@@ -72,7 +74,10 @@ export const tool = {
     mediaCode: z.string().optional().describe('Code for the new media item. Auto-generated if not provided.'),
     catalogVersionPk: z.string().optional().describe('PK of the CatalogVersion to assign to the new media. Only needed for catalog-aware media types. If absent, inferred from the target item.'),
   },
-  handler: async ({ environmentId, content: contentStr, mediaPk, targetPk, targetField, realFileName, mediaCode, catalogVersionPk }) => {
+  handler: async ({ environmentId, content: contentStr, mediaPk, targetPk, targetField, realFileName, mediaCode, catalogVersionPk, confirmed_by_user }) => {
+    if (!confirmed_by_user) {
+      return error('User confirmation required. Show the user what content will be written and to which media, ask for explicit approval, then retry with confirmed_by_user: true.');
+    }
     const env = await getEnvironment(environmentId);
     if (!env) {
       mcpLog({ tool: TOOL, envName: environmentId, preview: 'Unknown environment', isError: true });

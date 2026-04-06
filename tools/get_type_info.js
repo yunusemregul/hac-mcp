@@ -7,6 +7,7 @@ const TOOL = 'get_type_info';
 
 export const tool = {
   name: TOOL,
+  category: 'read',
   description: 'Get metadata and queryable fields for a SAP Commerce type. Use this when a FlexibleSearch query fails with unknown field errors to discover the correct field qualifiers. The database is MSSQL — do NOT use LIMIT, TOP, or OFFSET in FlexibleSearch queries; use the maxCount parameter instead.',
   inputSchema: {
     environmentId: z.string().describe('Environment ID from list_environments'),
