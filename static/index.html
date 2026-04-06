@@ -76,7 +76,11 @@
         </div>
         <div class="toggle-item">
           <span class="toggle-label">Groovy Execution</span>
-          <label class="toggle"><input type="checkbox" id="fGroovy" checked/><span class="slider"></span></label>
+          <label class="toggle"><input type="checkbox" id="fGroovy" checked onchange="document.getElementById('groovyCommitRow').style.display=this.checked?'':'none'"/><span class="slider"></span></label>
+        </div>
+        <div class="toggle-item" id="groovyCommitRow">
+          <span class="toggle-label">Groovy Commit Mode</span>
+          <label class="toggle"><input type="checkbox" id="fGroovyCommit" checked/><span class="slider"></span></label>
         </div>
         <div class="toggle-item">
           <span class="toggle-label">Read Property</span>

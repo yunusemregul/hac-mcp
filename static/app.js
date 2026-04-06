@@ -37,6 +37,7 @@ function render() {
           <span class="badge ${e.allowFlexSearch ? 'on':'off'}">FLEX ${e.allowFlexSearch ? 'ON':'OFF'}</span>
           <span class="badge ${e.allowImpexImport ? 'on':'off'}">IMPEX ${e.allowImpexImport ? 'ON':'OFF'}</span>
           <span class="badge ${e.allowGroovyExecution ? 'on':'off'}">GROOVY ${e.allowGroovyExecution ? 'ON':'OFF'}</span>
+          ${e.allowGroovyExecution ? `<span class="badge ${e.allowGroovyCommitMode !== false ? 'on':'off'}">COMMIT ${e.allowGroovyCommitMode !== false ? 'ON':'OFF'}</span>` : ''}
           <span class="badge ${e.allowReadProperty !== false ? 'on':'off'}">PROPS ${e.allowReadProperty !== false ? 'ON':'OFF'}</span>
         </div>
       </div>
@@ -87,6 +88,8 @@ function openForm(id) {
   document.getElementById('fFlex').checked = e ? e.allowFlexSearch : true;
   document.getElementById('fImpex').checked = e ? e.allowImpexImport : true;
   document.getElementById('fGroovy').checked = e ? e.allowGroovyExecution : true;
+  document.getElementById('fGroovyCommit').checked = e ? e.allowGroovyCommitMode !== false : true;
+  document.getElementById('groovyCommitRow').style.display = document.getElementById('fGroovy').checked ? '' : 'none';
   document.getElementById('fReadProperty').checked = e ? e.allowReadProperty !== false : true;
   document.getElementById('fDbType').value = e?.dbType ?? 'MSSQL';
   document.getElementById('fName').focus();
@@ -105,6 +108,7 @@ async function saveEnv() {
     allowFlexSearch: document.getElementById('fFlex').checked,
     allowImpexImport: document.getElementById('fImpex').checked,
     allowGroovyExecution: document.getElementById('fGroovy').checked,
+    allowGroovyCommitMode: document.getElementById('fGroovyCommit').checked,
     allowReadProperty: document.getElementById('fReadProperty').checked,
     dbType: document.getElementById('fDbType').value || null,
   };

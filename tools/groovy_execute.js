@@ -23,6 +23,10 @@ export const tool = {
       mcpLog({ tool: TOOL, envName: env.name, preview: 'Groovy disabled', isError: true });
       return error(`Groovy execution is disabled for environment "${env.name}".`);
     }
+    if (commit && env.allowGroovyCommitMode === false) {
+      mcpLog({ tool: TOOL, envName: env.name, preview: 'Groovy commit mode disabled', isError: true });
+      return error(`Groovy commit mode is disabled for environment "${env.name}".`);
+    }
 
     const scriptPreview = script.split('\n')[0].slice(0, 60);
     const runId = mcpLogStart({ tool: TOOL, envName: env.name, preview: `${scriptPreview}…` });
