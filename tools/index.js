@@ -7,6 +7,10 @@ import { tool as resolvePk } from './resolve_pk.js';
 import { tool as impexImport } from './impex_import.js';
 import { tool as groovyExecute } from './groovy_execute.js';
 import { tool as readProperty } from './read_property.js';
+import { tool as mediaRead } from './media_read.js';
+import { tool as mediaWrite } from './media_write.js';
+import { tool as runCronjob } from './run_cronjob.js';
+import { tool as listCronjobs } from './list_cronjobs.js';
 
 const tools = [
   listEnvironments,
@@ -17,6 +21,10 @@ const tools = [
   impexImport,
   groovyExecute,
   readProperty,
+  mediaRead,
+  mediaWrite,
+  runCronjob,
+  listCronjobs,
 ];
 
 export function registerAllTools(mcp) {
