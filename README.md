@@ -19,6 +19,8 @@ It authenticates with HAC using your existing credentials, no backend changes or
 - **Fine-grained permissions**: control which operations are allowed per environment
 - **Web UI**: browser-based management console for adding/editing environments and monitoring activity
 - **Real-time logging**: live HAC request and MCP tool execution logs via SSE
+
+![Web UI showing environment list and live activity log](docs/screenshots/web-ui-overview.jpeg)
 - **Type search**: trigram-based fuzzy search for SAP Commerce type names with per-environment caching
 - **FlexSearch error recovery**: when a query fails due to an unknown field or type, valid field names are fetched and returned alongside the error so the AI can correct and retry without manual intervention
 - **ImpEx validation and enrichment**: scripts are pre-validated for missing mandatory fields before import runs, and any post-import attribute errors are resolved to valid field lists on the fly so the AI can fix and retry the script itself
@@ -82,6 +84,8 @@ This registers the server with PM2 and runs `pm2 startup`, which prints a one-ti
 ### Via Web UI
 
 Open `http://localhost:18432/` in your browser, click **+ Add Environment**, fill in the details (connection is tested automatically as you type), then click **Save**.
+
+![Add Environment form with live connection test](docs/screenshots/add-environment-form.jpeg)
 
 ### Environment options
 
