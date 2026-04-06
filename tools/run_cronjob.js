@@ -38,12 +38,16 @@ export const tool = {
       mcpLog({ tool: TOOL, envName: env.name, preview: 'Groovy disabled', isError: true });
       return error(`Groovy execution is disabled for environment "${env.name}".`);
     }
+    if (env.allowGroovyCommitMode === false) {
+      mcpLog({ tool: TOOL, envName: env.name, preview: 'Groovy commit mode disabled', isError: true });
+      return error(`Groovy commit mode is disabled for environment "${env.name}".`);
+    }
 
     const runId = mcpLogStart({ tool: TOOL, envName: env.name, preview: `Running CronJob PK ${cronJobPk}` });
 
     let result;
     try {
-      result = await withSession(env, s => groovyExecute(s, SCRIPT(cronJobPk)));
+      result = await withSession(env, s => groovyExecute(s, SCRIPT(cronJobPk), { commit: true }));
     } catch (e) {
       mcpLog({ tool: TOOL, envName: env.name, preview: `Error: ${e.message}`, detail: e.stack || '', isError: true, runId });
       return error(e.message);
