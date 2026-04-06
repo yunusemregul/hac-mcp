@@ -2,6 +2,17 @@
 
 A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that provides AI assistants (like Claude) with programmatic access to SAP Commerce Cloud's **Hybris Administration Console (HAC)**. It enables automated FlexibleSearch queries, ImpEx imports, Groovy script execution, and system administration tasks across multiple environments.
 
+It authenticates with HAC using your existing credentials, no backend changes or additional setup required. Permitted operations are configured per environment, so the AI can only do what you explicitly allow.
+
+## What You Can Do
+
+- *"Inspect the PromotionRule with code SUMMER25 in staging and recreate it in my local environment"*
+- *"My ImpEx is failing on staging, check the actual values in production and fill in the correct ones"*
+- *"Find all orders stuck in WAIT status for more than 3 days in production and give me a summary"*
+- *"Write a Groovy script to do ... and run it on local first, if it works I will approve it for staging"*
+- *"This code is not working as expected, can you check its edge cases using Groovy with real data on staging?"*
+- *"I want to test this CronJob on staging, it has a media field that accepts a CSV in txt format with source-product and target-product columns. Create multiple test medias, write them, run the job for each case, and validate the results with FlexibleSearch"*
+
 ## Features
 
 - **Multi-environment support**: configure and switch between local, staging, and production HAC instances
@@ -9,7 +20,8 @@ A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that p
 - **Web UI**: browser-based management console for adding/editing environments and monitoring activity
 - **Real-time logging**: live HAC request and MCP tool execution logs via SSE
 - **Type search**: trigram-based fuzzy search for SAP Commerce type names with per-environment caching
-- **ImpEx validation**: pre-validates scripts and checks mandatory fields before importing
+- **FlexSearch error recovery**: when a query fails due to an unknown field or type, valid field names are fetched and returned alongside the error so the AI can correct and retry without manual intervention
+- **ImpEx validation and enrichment**: scripts are pre-validated for missing mandatory fields before import runs, and any post-import attribute errors are resolved to valid field lists on the fly so the AI can fix and retry the script itself
 
 ## Tools
 
@@ -69,22 +81,22 @@ This registers the server with PM2 and runs `pm2 startup`, which prints a one-ti
 
 ### Via Web UI (recommended)
 
-Open `http://localhost:18432/` in your browser, click **+ Add**, fill in the environment details, then click **Test** to verify and **Save**.
+Open `http://localhost:18432/` in your browser, click **+ Add Environment**, fill in the details (connection is tested automatically as you type), then click **Save**.
 
 ### Environment options
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `name` | string |: | Display name |
-| `description` | string |: | Optional notes |
-| `url` | string |: | HAC base URL (e.g. `https://host:9002/`) |
-| `username` | string |: | HAC login username |
-| `password` | string |: | HAC login password |
-| `dbType` | string |: | Database dialect: `MSSQL`, `MySQL`, `Oracle`, `SAP HANA`, `HSQLDB` |
+| `name` | string | | Display name |
+| `description` | string | | Optional notes |
+| `url` | string | | HAC base URL (e.g. `https://host:9002/`) |
+| `username` | string | | HAC login username |
+| `password` | string | | HAC login password |
+| `dbType` | string | `MSSQL` | Database dialect: `MSSQL` or `MySQL` |
 | `allowFlexSearch` | boolean | `true` | Allow FlexibleSearch queries |
-| `allowImpexImport` | boolean | `true` | Allow ImpEx imports |
-| `allowGroovyExecution` | boolean | `true` | Allow Groovy script execution |
-| `allowGroovyCommitMode` | boolean | `true` | Allow Groovy scripts to commit changes |
+| `allowImpexImport` | boolean | `false` | Allow ImpEx imports |
+| `allowGroovyExecution` | boolean | `false` | Allow Groovy script execution |
+| `allowGroovyCommitMode` | boolean | `false` | Allow Groovy scripts to commit changes |
 | `allowReadProperty` | boolean | `true` | Allow reading platform config properties |
 
 > **Tip for production:** Disable `allowImpexImport`, `allowGroovyCommitMode`, or both to prevent accidental data modifications.
@@ -103,12 +115,6 @@ Add the following to your MCP client configuration:
 }
 ```
 
-Then in Claude, you can ask things like:
-- *"List available HAC environments"*
-- *"Run a FlexibleSearch to find all active products in environment X"*
-- *"Get the type info for the `Order` type"*
-- *"Import this ImpEx script to staging"*
-
 ## Project Structure
 
 ```
@@ -120,7 +126,7 @@ hac-mcp/
 ├── tools/
 │   ├── index.js        # Tool registry
 │   ├── context.js      # Shared runtime state (sessions, logging)
-│   ├── zodLoose.js     # Loose Zod validators (string → number/bool)
+│   ├── zodLoose.js     # Loose Zod validators (string -> number/bool)
 │   └── *.js            # One file per MCP tool
 └── static/
     ├── index.html      # Management console UI
@@ -130,6 +136,6 @@ hac-mcp/
 
 ## Security Notes
 
-- Credentials are stored in plaintext in `environments.json`: it is already gitignored, but avoid exposing it otherwise.
+- Credentials are stored in plaintext in `~/.hac-mcp/environments.json`. Avoid exposing this file.
 - SSL certificate verification is disabled for HAC connections: be aware of this in untrusted networks.
 - Restrict write permissions (`allowImpexImport`, `allowGroovyCommitMode`) on production environments.

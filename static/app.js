@@ -40,7 +40,7 @@ const CATEGORY_META = {
 async function showManifest() {
   document.getElementById('manifestOverlay').classList.add('visible');
   const el = document.getElementById('manifestTools');
-  if (el.dataset.loaded) return;
+  if (el.dataset.loaded === '1') return;
   el.innerHTML = '<div class="empty" style="padding:20px 0">Loading…</div>';
   const manifest = await fetch('/api/manifest').then(r => r.json());
   document.getElementById('manifestTitle').textContent = manifest.name;
@@ -61,7 +61,11 @@ async function showManifest() {
           <span class="manifest-cat ${meta.cls}">${meta.label}</span>
         </div>
         <p class="manifest-tool-desc">${esc(t.description)}</p>
-        ${t.params.length ? `<div class="manifest-params">${t.params.map(p => `<span class="manifest-param">${esc(p)}</span>`).join('')}</div>` : ''}
+        ${t.params.length ? `<div class="manifest-params">${t.params.map(p => `
+          <span class="manifest-param${p.optional ? ' optional' : ''}">
+            <span class="manifest-param-name">${esc(p.name)}</span>
+            ${p.description ? `<span class="manifest-param-desc">${esc(p.description)}</span>` : ''}
+          </span>`).join('')}</div>` : ''}
       </div>
     `).join('');
     return `<div class="manifest-section">

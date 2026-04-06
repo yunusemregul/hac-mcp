@@ -230,8 +230,10 @@ input.input-err:focus{border-color:#ef4444}
 [data-theme=light] .cat-write{background:#fef2f2;color:#dc2626;border-color:#fca5a5}
 [data-theme=light] .cat-util{background:#dcfce7;color:#15803d;border-color:#86efac}
 .manifest-tool-desc{font-size:.78rem;color:var(--text2);line-height:1.55}
-.manifest-params{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
-.manifest-param{font-size:.65rem;font-family:'JetBrains Mono','Fira Code',monospace;background:var(--bg);border:1px solid var(--border);color:var(--text3);padding:2px 7px;border-radius:4px}
+.manifest-params{display:flex;flex-direction:column;gap:5px;margin-top:8px}
+.manifest-param{display:flex;align-items:baseline;gap:10px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:5px 10px}
+.manifest-param-name{font-size:.68rem;font-family:'JetBrains Mono','Fira Code',monospace;color:var(--accent);flex-shrink:0}
+.manifest-param-desc{font-size:.7rem;color:var(--text3);line-height:1.4}
 
 /* toast */
 .toast{position:fixed;bottom:24px;right:24px;padding:10px 16px;border-radius:8px;font-size:.8rem;font-weight:600;opacity:0;transform:translateY(6px);transition:all .2s;pointer-events:none;z-index:100}

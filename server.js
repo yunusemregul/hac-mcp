@@ -170,7 +170,13 @@ app.get('/api/manifest', (_req, res) => {
       name: t.name,
       category: t.category ?? 'utility',
       description: t.description,
-      params: t.inputSchema ? Object.keys(t.inputSchema) : [],
+      params: t.inputSchema
+        ? Object.entries(t.inputSchema).map(([name, schema]) => ({
+            name,
+            description: schema.description ?? schema._def?.description ?? null,
+            optional: schema.isOptional?.() === true,
+          }))
+        : [],
     })),
   });
 });
