@@ -66,7 +66,7 @@ Options:
 
 Environment configuration is stored in `~/.hac-mcp/environments.json`.
 
-### Auto-start on system boot (optional)
+### Auto-start on system boot (optional, recommended)
 
 To keep the server running across restarts, use the `startup` subcommand (requires [PM2](https://pm2.keymetrics.io/)):
 
@@ -79,7 +79,7 @@ This registers the server with PM2 and runs `pm2 startup`, which prints a one-ti
 
 ## Configuration
 
-### Via Web UI (recommended)
+### Via Web UI
 
 Open `http://localhost:18432/` in your browser, click **+ Add Environment**, fill in the details (connection is tested automatically as you type), then click **Save**.
 
