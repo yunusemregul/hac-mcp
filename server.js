@@ -238,14 +238,13 @@ createServer(app).listen(PORT, () => {
     bold:   '\x1b[1m',
     dim:    '\x1b[2m',
     green:  '\x1b[32m',
-    cyan:   '\x1b[36m',
-    white:  '\x1b[97m',
-  } : { reset: '', bold: '', dim: '', green: '', cyan: '', white: '' };
+    blue:   '\x1b[34m',
+  } : { reset: '', bold: '', dim: '', green: '', blue: '' };
 
   // helpers
   const label = s => `${c.dim}${s}${c.reset}`;
-  const value = s => `${c.cyan}${s}${c.reset}`;
-  const heading = s => `${c.bold}${c.white}${s}${c.reset}`;
+  const value = s => `${c.blue}${s}${c.reset}`;
+  const heading = s => `${c.bold}${s}${c.reset}`;
   const code = s => `${c.green}${s}${c.reset}`;
 
   console.log('');
@@ -265,12 +264,13 @@ createServer(app).listen(PORT, () => {
   console.log(`  ${heading('Other MCP Clients')}`);
   console.log(`  ${label('Add the following to your MCP client config:')}`);
   console.log('');
-  console.log(`  ${c.cyan}{${c.reset}`);
-  console.log(`  ${c.cyan}  "mcpServers": {${c.reset}`);
+  console.log(`  ${code('{')}`);
+  console.log(`  ${code('  "mcpServers": {')}`);
   console.log(`  ${code('    "hac-mcp": {')}`);
   console.log(`  ${code(`      "url": "${base}/mcp/sse"`)}`);
   console.log(`  ${code('    }')}`);
-  console.log(`  ${c.cyan}  }${c.reset}`);
-  console.log(`  ${c.cyan}}${c.reset}`);
+  console.log(`  ${code('  }')}`);
+  console.log(`  ${code('}')}`);
+
   console.log('');
 });
