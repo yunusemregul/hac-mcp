@@ -45,6 +45,7 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/static', express.static(join(__dirname, 'static')));
+app.use('/', express.static(join(__dirname, 'static')));
 
 // Mock OAuth endpoints - auto-approve everything, no user interaction required
 const BASE_URL = `http://localhost:${PORT}`;
@@ -90,7 +91,6 @@ app.post('/token', (_req, res) => {
     expires_in: 86400,
   });
 });
-app.get('/', (_req, res) => res.sendFile(join(__dirname, 'static', 'index.html')));
 
 // Environments API
 app.get('/api/environments', async (_req, res) => res.json(await listEnvironments()));
