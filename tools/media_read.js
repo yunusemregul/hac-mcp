@@ -71,7 +71,7 @@ export const tool = {
 
     if (result.stacktraceText) {
       mcpLog({ tool: TOOL, envName: env.name, preview: `❌ PK ${mediaPk}`, detail: result.stacktraceText, isError: true, runId });
-      let out = `**${env.name}** — ❌ Error reading media PK ${mediaPk}\n`;
+      let out = `**${env.name}** - ❌ Error reading media PK ${mediaPk}\n`;
       out += `\n**Stacktrace:**\n\`\`\`\n${result.stacktraceText}\n\`\`\``;
       return { content: [{ type: 'text', text: out }], isError: true };
     }
@@ -81,6 +81,6 @@ export const tool = {
 
     mcpLog({ tool: TOOL, envName: env.name, preview: `✅ PK ${mediaPk} (${content.length} chars)`, runId });
 
-    return text(`**${env.name}** — ✅ Media PK ${mediaPk}\n\n**Content:**\n\`\`\`\n${content}\n\`\`\``);
+    return text(`**${env.name}** - ✅ Media PK ${mediaPk}\n\n**Content:**\n\`\`\`\n${content}\n\`\`\``);
   },
 };

@@ -9,7 +9,7 @@ export const tool = {
   description: 'Search for SAP Commerce type names by fuzzy match. Use this before get_type_info when you are unsure of the exact type code.',
   inputSchema: {
     environmentId: z.string().describe('Environment ID from list_environments'),
-    query: z.string().describe('Type name to search for — fuzzy, e.g. "InboundProductLogs", "Solr", "Order"'),
+    query: z.string().describe('Type name to search for - fuzzy, e.g. "InboundProductLogs", "Solr", "Order"'),
   },
   handler: async ({ environmentId, query }) => {
     const env = await getEnvironment(environmentId);

@@ -62,7 +62,7 @@ export async function fetchScalarFields(env, typeCode) {
 export const tool = {
   name: TOOL,
   category: 'read',
-  description: 'Execute a FlexibleSearch query on a HAC environment. Call list_environments first to get valid IDs. IMPORTANT: The database is MSSQL — do NOT use LIMIT, TOP, or OFFSET in queries; use the maxCount parameter to limit rows instead.',
+  description: 'Execute a FlexibleSearch query on a HAC environment. Call list_environments first to get valid IDs. IMPORTANT: The database is MSSQL - do NOT use LIMIT, TOP, or OFFSET in queries; use the maxCount parameter to limit rows instead.',
   inputSchema: {
     environmentId: z.string().describe('Environment ID from list_environments'),
     query: z.string().describe('FlexibleSearch query, e.g. SELECT {pk}, {uid} FROM {User}'),
@@ -84,8 +84,9 @@ export const tool = {
     const preview = `${query.slice(0, 60)}${query.length > 60 ? '…' : ''}`;
     const runId = mcpLogStart({ tool: TOOL, envName: env.name, preview });
 
-    if (/\bLIMIT\b/i.test(query)) {
-      const msg = 'Do not use LIMIT in FlexibleSearch queries — the database is MSSQL. Use the maxCount parameter to limit rows.';
+    const rowLimitMatch = query.match(/\b(LIMIT|TOP|ROWNUM|FETCH\s+FIRST|ROWS\s+ONLY)\b/i);
+    if (rowLimitMatch) {
+      const msg = `Do not use row-limiting clauses (LIMIT, TOP, ROWNUM, FETCH FIRST, ROWS ONLY) in FlexibleSearch queries - use the maxCount parameter to limit rows instead.`;
       mcpLog({ tool: TOOL, envName: env.name, preview: 'Query error', detail: msg, isError: true, runId });
       return error(`Query error: ${msg}`);
     }
@@ -130,18 +131,13 @@ export const tool = {
         return error(`Query error: ${detail}`);
       }
 
-      if (/TOP.*OFFSET|OFFSET.*TOP/i.test(msg)) {
-        const topMsg = 'Do not use TOP in FlexibleSearch queries — it conflicts with the pagination OFFSET that HAC adds internally. Use the maxCount parameter to limit rows instead.';
-        mcpLog({ tool: TOOL, envName: env.name, preview: 'Query error', detail: topMsg, isError: true, runId });
-        return error(`Query error: ${topMsg}`);
-      }
 
       mcpLog({ tool: TOOL, envName: env.name, preview: 'Query error', detail: rawDetail, isError: true, runId });
       return error(`Query error: ${rawDetail}`);
     }
 
     const { headers, resultList, resultCount, executionTime } = result;
-    let out = `**${env.name}** — ${resultCount} row(s) in ${executionTime}ms\n\n`;
+    let out = `**${env.name}** - ${resultCount} row(s) in ${executionTime}ms\n\n`;
 
     if (resultList?.length) {
       const csvCell = c => {
@@ -156,7 +152,7 @@ export const tool = {
     }
 
     mcpLog({ tool: TOOL, envName: env.name,
-      preview: `${resultCount} row(s) in ${executionTime}ms — ${preview}`,
+      preview: `${resultCount} row(s) in ${executionTime}ms - ${preview}`,
       detail: `Query: ${query}\n\nResult:\n${out}`,
       runId,
     });

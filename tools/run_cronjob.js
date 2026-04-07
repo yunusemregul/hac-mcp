@@ -28,7 +28,7 @@ export const tool = {
   inputSchema: {
     environmentId: z.string().describe('Environment ID from list_environments'),
     cronJobPk: z.string().describe('PK of the CronJob to run'),
-    confirmed_by_user: z.boolean().describe('Must be true — user has explicitly reviewed which CronJob will run and approved. The server will reject the call if false.'),
+    confirmed_by_user: z.boolean().describe('Must be true - user has explicitly reviewed which CronJob will run and approved. The server will reject the call if false.'),
   },
   handler: async ({ environmentId, cronJobPk, confirmed_by_user }) => {
     if (!confirmed_by_user) {
@@ -62,7 +62,7 @@ export const tool = {
     const preview = isErr ? `❌ CronJob PK ${cronJobPk}` : `✅ ${result.executionResult}`;
     mcpLog({ tool: TOOL, envName: env.name, preview, detail: result.stacktraceText || '', isError: isErr, runId });
 
-    let out = `**${env.name}** — ${isErr ? '❌ Error' : '✅ CronJob finished'}\n`;
+    let out = `**${env.name}** - ${isErr ? '❌ Error' : '✅ CronJob finished'}\n`;
     if (result.executionResult) out += `\n**Result:**\n\`\`\`\n${result.executionResult}\n\`\`\``;
     if (result.outputText) out += `\n**Output:**\n\`\`\`\n${result.outputText}\n\`\`\``;
     if (result.stacktraceText) out += `\n**Stacktrace:**\n\`\`\`\n${result.stacktraceText}\n\`\`\``;

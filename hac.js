@@ -8,7 +8,7 @@ const dnsLookup = dns.promises.lookup;
 const dnsCache = {};
 const agentCache = {};
 
-// Logger — server.js sets this to broadcast to SSE clients
+// Logger - server.js sets this to broadcast to SSE clients
 let _log = () => {};
 export function setHacLogger(fn) { _log = fn; }
 function log(level, msg, envName) {
@@ -118,7 +118,7 @@ export async function login(baseUrl, username, password, envName) {
   const agent = getAgent(host);
   const proto = { host, ip, port, ctx, agent, cookies: {}, envName };
 
-  log('info', `Fetching login page — getting CSRF token + session cookie`, envName);
+  log('info', `Fetching login page - getting CSRF token + session cookie`, envName);
   const loginPage = await httpRequest(opts(proto, ctx + '/login', 'GET'));
   const cookies = extractCookies(loginPage.headers);
   const csrf = extractCsrf(loginPage.body);
@@ -141,14 +141,14 @@ export async function login(baseUrl, username, password, envName) {
   const home = await httpRequest(opts(session, redirectPath, 'GET'));
 
   const loggedIn = home.body.includes("You're Administrator") || home.body.includes('logout');
-  if (!loggedIn) throw new Error('Login failed — check credentials');
+  if (!loggedIn) throw new Error('Login failed - check credentials');
   log('ok', `Login successful for ${username}@${host}`, envName);
 
   return session;
 }
 
 export class SessionExpiredError extends Error {
-  constructor() { super('Session expired — HAC redirected to login page'); this.name = 'SessionExpiredError'; }
+  constructor() { super('Session expired - HAC redirected to login page'); this.name = 'SessionExpiredError'; }
 }
 
 function assertNotLoginPage(res) {

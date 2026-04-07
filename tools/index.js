@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { callCtx } from './context.js';
 import { tool as listEnvironments } from './list_environments.js';
 import { tool as flexibleSearch } from './flexible_search.js';
 import { tool as searchType } from './search_type.js';
@@ -29,8 +30,11 @@ const tools = [
 
 export { tools };
 
-export function registerAllTools(mcp) {
+export function registerAllTools(mcp, getClientLabel) {
   for (const { name, description, handler, inputSchema } of tools) {
-    mcp.registerTool(name, { description, inputSchema: z.object(inputSchema ?? {}) }, handler);
+    mcp.registerTool(name, { description, inputSchema: z.object(inputSchema ?? {}) }, (args, extra) => {
+      const client = getClientLabel?.(extra?.sessionId) ?? null;
+      return callCtx.run({ client }, () => handler(args, extra));
+    });
   }
 }

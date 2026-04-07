@@ -8,7 +8,7 @@ const TOOL = 'get_type_info';
 export const tool = {
   name: TOOL,
   category: 'read',
-  description: 'Get metadata and queryable fields for a SAP Commerce type. Use this when a FlexibleSearch query fails with unknown field errors to discover the correct field qualifiers. The database is MSSQL — do NOT use LIMIT, TOP, or OFFSET in FlexibleSearch queries; use the maxCount parameter instead.',
+  description: 'Get metadata and queryable fields for a SAP Commerce type. Use this when a FlexibleSearch query fails with unknown field errors to discover the correct field qualifiers. The database is MSSQL - do NOT use LIMIT, TOP, or OFFSET in FlexibleSearch queries; use the maxCount parameter instead.',
   inputSchema: {
     environmentId: z.string().describe('Environment ID from list_environments'),
     typeCode: z.string().optional().describe('Type code to look up, e.g. SolrFacetSearchConfig, Order, Product'),
@@ -154,7 +154,7 @@ export const tool = {
     if (supertypeName) out += ` (extends ${supertypeName})`;
     out += '\n\n';
 
-    out += `Scalar fields — use directly in SELECT / WHERE / ORDER BY:\n`;
+    out += `Scalar fields - use directly in SELECT / WHERE / ORDER BY:\n`;
     for (const [q, , encPK, attrTypePK, isUnique] of scalar) {
       const inherited = includeInherited && ancestorNames[String(encPK)] && ancestorNames[String(encPK)] !== code
         ? ` (from ${ancestorNames[String(encPK)]})` : '';
@@ -166,7 +166,7 @@ export const tool = {
       out += line + '\n';
     }
 
-    out += '\nRelation/collection fields — require JOIN to query:\n';
+    out += '\nRelation/collection fields - require JOIN to query:\n';
     for (const [q,,encPK] of relations) {
       const { targetType, linkTable } = relationInfo[q] || {};
       const inherited = includeInherited && ancestorNames[String(encPK)] && ancestorNames[String(encPK)] !== code ? ` (from ${ancestorNames[String(encPK)]})` : '';

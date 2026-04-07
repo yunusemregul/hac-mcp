@@ -13,14 +13,14 @@ It authenticates with HAC using your existing credentials, no backend changes or
 - *"This code is not working as expected, can you check its edge cases using Groovy with real data on staging?"*
 - *"I want to test this CronJob on staging, it has a media field that accepts a CSV in txt format with source-product and target-product columns. Create multiple test medias, write them, run the job for each case, and validate the results with FlexibleSearch"*
 
+![Web UI showing environment list and live activity log](docs/screenshots/web-ui-overview.jpeg)
+
 ## Features
 
 - **Multi-environment support**: configure and switch between local, staging, and production HAC instances
 - **Fine-grained permissions**: control which operations are allowed per environment
 - **Web UI**: browser-based management console for adding/editing environments and monitoring activity
 - **Real-time logging**: live HAC request and MCP tool execution logs via SSE
-
-![Web UI showing environment list and live activity log](docs/screenshots/web-ui-overview.jpeg)
 - **Type search**: trigram-based fuzzy search for SAP Commerce type names with per-environment caching
 - **FlexSearch error recovery**: when a query fails due to an unknown field or type, valid field names are fetched and returned alongside the error so the AI can correct and retry without manual intervention
 - **ImpEx validation and enrichment**: scripts are pre-validated for missing mandatory fields before import runs, and any post-import attribute errors are resolved to valid field lists on the fly so the AI can fix and retry the script itself
@@ -85,7 +85,7 @@ This registers the server with PM2 and runs `pm2 startup`, which prints a one-ti
 
 Open `http://localhost:18432/` in your browser, click **+ Add Environment**, fill in the details (connection is tested automatically as you type), then click **Save**.
 
-![Add Environment form with live connection test](docs/screenshots/add-environment-form.jpeg)
+![Add Environment form with live connection test](https://github.com/yunusemregul/hac-mcp/blob/master/docs/screenshots/add-environment-form.jpeg)
 
 ### Environment options
 

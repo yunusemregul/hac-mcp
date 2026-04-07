@@ -64,6 +64,7 @@
         <div class="status-pill" id="pillEnvs"><span class="status-dot inactive"></span><span id="pillEnvsLabel">0 environments</span></div>
         <div class="status-pill" id="pillClients"><span class="status-dot inactive" id="clientDot"></span><span id="pillClientsLabel">0 clients connected</span></div>
       </div>
+      <div id="clientList" style="display:none;flex-direction:column;gap:4px"></div>
       <div id="infoSetup">
         <div style="margin-bottom:12px">
           <div class="info-label">MCP Endpoint</div>
@@ -122,7 +123,7 @@
         <label class="toggle"><input type="checkbox" id="fReadProperty" checked/><span class="slider"></span></label>
       </div>
     </div>
-    <div class="toggle-section-label" style="margin-top:12px">Mixed <span class="toggle-section-note">— may write</span></div>
+    <div class="toggle-section-label" style="margin-top:12px">Mixed <span class="toggle-section-note"> -  may write</span></div>
     <div class="toggle-group">
       <div class="toggle-item warning">
         <div class="toggle-label">Groovy Execution<span class="toggle-desc">Runs arbitrary code</span></div>
@@ -133,7 +134,7 @@
         <label class="toggle"><input type="checkbox" id="fGroovyCommit" disabled onchange="updateGroovyNote()"/><span class="slider"></span></label>
       </div>
     </div>
-    <div class="toggle-note" id="groovyNote" style="display:none">⚠ Even with Commit Mode off, Groovy scripts can still interact with external systems — sending emails, SMS, calling APIs, or triggering workflows.</div>
+    <div class="toggle-note" id="groovyNote" style="display:none">⚠ Even with Commit Mode off, Groovy scripts can still interact with external systems - sending emails, SMS, calling APIs, or triggering workflows.</div>
     <div class="toggle-section-label" style="margin-top:12px">Write</div>
     <div class="toggle-group">
       <div class="toggle-item danger">
@@ -154,7 +155,7 @@
     <button class="modal-close" onclick="dismissModal()">✕</button>
     <div class="modal-header">
       <div class="modal-logo">HAC MCP</div>
-      <p class="modal-subtitle">SAP Commerce Cloud HAC — MCP Server</p>
+      <p class="modal-subtitle">SAP Commerce Cloud HAC - MCP Server</p>
     </div>
 
     <div class="modal-steps">
@@ -197,13 +198,14 @@
     <button class="modal-close" onclick="closeManifest()">✕</button>
     <div class="modal-header" style="margin-bottom:20px">
       <div class="modal-logo" id="manifestTitle">HAC MCP</div>
-      <p class="modal-subtitle" id="manifestSubtitle">SAP Commerce Cloud HAC — MCP Server</p>
+      <p class="modal-subtitle" id="manifestSubtitle">SAP Commerce Cloud HAC - MCP Server</p>
     </div>
     <div id="manifestTools"></div>
   </div>
 </div>
 
 <div class="toast" id="toast"></div>
+<div class="global-tooltip" id="globalTooltip"></div>
 <script src="/static/app.js"></script>
 </body>
 </html>

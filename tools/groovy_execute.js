@@ -13,7 +13,7 @@ export const tool = {
     environmentId: z.string().describe('Environment ID from list_environments'),
     script: z.string().describe('Groovy script content'),
     commit: optionalLooseBool().describe('Whether to commit the transaction (default: false)'),
-    confirmed_by_user: z.boolean().describe('Must be true — user has explicitly reviewed and approved this script. The server will reject the call if false.'),
+    confirmed_by_user: z.boolean().describe('Must be true - user has explicitly reviewed and approved this script. The server will reject the call if false.'),
   },
   handler: async ({ environmentId, script, commit, confirmed_by_user }) => {
     if (!confirmed_by_user) {
@@ -45,7 +45,7 @@ export const tool = {
     }
 
     const isErr = !!result.stacktraceText;
-    let out = `**${env.name}** — ${isErr ? '❌ Error' : '✅ Success'}\n`;
+    let out = `**${env.name}** - ${isErr ? '❌ Error' : '✅ Success'}\n`;
     if (result.executionResult != null) out += `\n**Result:**\n\`\`\`\n${result.executionResult}\n\`\`\``;
     if (result.outputText) out += `\n**Output:**\n\`\`\`\n${result.outputText}\n\`\`\``;
     if (result.stacktraceText) out += `\n**Stacktrace:**\n\`\`\`\n${result.stacktraceText}\n\`\`\``;

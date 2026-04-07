@@ -13,7 +13,7 @@ def modelService = spring.getBean('modelService')
 def media = modelService.get(PK.fromLong(${mediaPk}L))
 def bytes = "${base64}".decodeBase64()
 mediaService.setStreamForMedia(media, new java.io.ByteArrayInputStream(bytes), ${realFileName ? `"${realFileName}"` : 'media.realFileName ?: media.code'}, "text/plain")
-"OK — wrote \${bytes.length} bytes to media \${media.pk}"
+"OK - wrote \${bytes.length} bytes to media \${media.pk}"
 `.trim();
 
 const SCRIPT_CREATE = (targetPk, targetField, base64, realFileName, mediaCode, catalogVersionPk) => `
@@ -56,7 +56,7 @@ mediaService.setStreamForMedia(media, new java.io.ByteArrayInputStream(bytes), $
 target."${targetField}" = media
 modelService.save(target)
 
-"OK — created media \${media.pk} (\${mediaTypecode}, code=\${media.code}), wrote \${bytes.length} bytes, assigned to \${typecode}.\${target.pk}.${targetField}"
+"OK - created media \${media.pk} (\${mediaTypecode}, code=\${media.code}), wrote \${bytes.length} bytes, assigned to \${typecode}.\${target.pk}.${targetField}"
 `.trim();
 
 export const tool = {
@@ -66,7 +66,7 @@ export const tool = {
   inputSchema: {
     environmentId: z.string().describe('Environment ID from list_environments'),
     content: z.string().describe('Text content to write (UTF-8)'),
-    confirmed_by_user: z.boolean().describe('Must be true — user has explicitly reviewed what will be written and approved. The server will reject the call if false.'),
+    confirmed_by_user: z.boolean().describe('Must be true - user has explicitly reviewed what will be written and approved. The server will reject the call if false.'),
     mediaPk: z.string().optional().describe('PK of an existing MediaModel to overwrite. If provided, targetPk/targetField are ignored.'),
     targetPk: z.string().optional().describe('PK of the item that owns the media field. Required when mediaPk is not provided.'),
     targetField: z.string().optional().describe('Attribute name on the target item (e.g. "content"). Used to determine media type and assign after creation.'),
@@ -114,7 +114,7 @@ export const tool = {
     const isErr = !!result.stacktraceText;
     mcpLog({ tool: TOOL, envName: env.name, preview: `${isErr ? '❌' : '✅'} ${preview}`, detail: result.stacktraceText || result.executionResult || '', isError: isErr, runId });
 
-    let out = `**${env.name}** — ${isErr ? '❌ Error' : '✅ Success'}\n`;
+    let out = `**${env.name}** - ${isErr ? '❌ Error' : '✅ Success'}\n`;
     if (result.executionResult) out += `\n**Result:**\n\`\`\`\n${result.executionResult}\n\`\`\``;
     if (result.stacktraceText) out += `\n**Stacktrace:**\n\`\`\`\n${result.stacktraceText}\n\`\`\``;
     return isErr ? { content: [{ type: 'text', text: out }], isError: true } : text(out);

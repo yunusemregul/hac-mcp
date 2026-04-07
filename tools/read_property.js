@@ -10,7 +10,7 @@ export const tool = {
   description: 'Search HAC configuration properties by key or value. Returns matching key-value pairs from the platform configuration page.',
   inputSchema: {
     environmentId: z.string().describe('Environment ID from list_environments'),
-    search: z.string().describe('Search term — matches against property keys and values (case-insensitive substring)'),
+    search: z.string().describe('Search term - matches against property keys and values (case-insensitive substring)'),
   },
   handler: async ({ environmentId, search }) => {
     const env = await getEnvironment(environmentId);
@@ -44,7 +44,7 @@ export const tool = {
     }
 
     const lines = matches.map(([k, v]) => `${k} = ${v}`).join('\n');
-    const out = `**${env.name}** — ${matches.length} property match(es) for "${search}":\n\n\`\`\`\n${lines}\n\`\`\``;
+    const out = `**${env.name}** - ${matches.length} property match(es) for "${search}":\n\n\`\`\`\n${lines}\n\`\`\``;
     mcpLog({ tool: TOOL, envName: env.name, preview: `${matches.length} match(es) for "${search}"`, detail: out, runId });
     return text(out);
   },

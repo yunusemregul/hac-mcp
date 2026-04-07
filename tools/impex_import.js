@@ -106,7 +106,7 @@ export const tool = {
     enableCodeExecution: optionalLooseBool(),
     distributedMode: optionalLooseBool(),
     sldEnabled: optionalLooseBool(),
-    confirmed_by_user: z.boolean().describe('Must be true — user has explicitly reviewed and approved this script. The server will reject the call if false.'),
+    confirmed_by_user: z.boolean().describe('Must be true - user has explicitly reviewed and approved this script. The server will reject the call if false.'),
   },
   handler: async ({ environmentId, script: scriptArg, impexContent, validationEnum, maxThreads, legacyMode, enableCodeExecution, distributedMode, sldEnabled, confirmed_by_user }) => {
     if (!confirmed_by_user) {
@@ -153,7 +153,7 @@ export const tool = {
 
     const isErr = result.level === 'error';
     const icon = isErr ? '❌' : '✅';
-    let out = `**${env.name}** — ${icon} ${result.result || 'Import complete'}\n`;
+    let out = `**${env.name}** - ${icon} ${result.result || 'Import complete'}\n`;
     if (result.details) out += `\n\`\`\`\n${formatImpexDetails(result.details)}\n\`\`\``;
 
     if (isErr && result.details) {
@@ -171,7 +171,7 @@ export const tool = {
     }
 
     mcpLog({ tool: TOOL, envName: env.name,
-      preview: `${isErr ? '❌' : '✅'} ${result.result || 'Done'} — ${scriptPreview}…`,
+      preview: `${isErr ? '❌' : '✅'} ${result.result || 'Done'} - ${scriptPreview}…`,
       detail: `Script:\n${script}\n\nResult: ${result.result}\n\n${result.details || ''}`,
       isError: isErr, runId,
     });

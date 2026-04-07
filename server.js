@@ -11,7 +11,7 @@ import { flexibleSearch, setHacLogger } from './hac.js';
 import { listEnvironments, getEnvironment, createEnvironment, updateEnvironment, deleteEnvironment } from './storage.js';
 import { getIndex } from './type-index.js';
 import { registerAllTools, tools as allTools } from './tools/index.js';
-import { getSession, withSession, attachLogClient, detachLogClient, getMcpLogBuffer } from './tools/context.js';
+import { getSession, withSession, attachLogClient, detachLogClient, getMcpLogBuffer, mcpLogSystem } from './tools/context.js';
 
 const PORT = process.env.PORT || 18432;
 
@@ -26,10 +26,18 @@ setHacLogger(entry => {
 });
 
 // ─── MCP server factory ───────────────────────────────────────────────────────
-function createMcpInstance() {
+function createMcpInstance(getClientLabel) {
   const mcp = new McpServer({ name: 'hac-mcp', version: '1.0.0' }, { timeout: 60000 });
-  registerAllTools(mcp);
+  registerAllTools(mcp, getClientLabel);
   return mcp;
+}
+
+let clientCounter = 0;
+function clientLabel(session) {
+  const num = `Client #${session.clientNum}`;
+  const v = session.clientInfo?.version;
+  if (!v) return num;
+  return `${num} · ${v.title || v.name} ${v.version}`;
 }
 
 // ─── Express ──────────────────────────────────────────────────────────────────
@@ -38,7 +46,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/static', express.static(join(__dirname, 'static')));
 
-// Mock OAuth endpoints — auto-approve everything, no user interaction required
+// Mock OAuth endpoints - auto-approve everything, no user interaction required
 const BASE_URL = `http://localhost:${PORT}`;
 
 app.get('/.well-known/oauth-authorization-server', (_req, res) => {
@@ -165,7 +173,7 @@ app.get('/api/manifest', (_req, res) => {
   res.json({
     name: 'hac-mcp',
     version: '1.0.0',
-    description: 'SAP Commerce Cloud HAC — MCP Server',
+    description: 'SAP Commerce Cloud HAC - MCP Server',
     tools: allTools.map(t => ({
       name: t.name,
       category: t.category ?? 'utility',
@@ -184,16 +192,35 @@ app.get('/api/manifest', (_req, res) => {
 // Status API
 app.get('/api/status', async (_req, res) => {
   const environments = await listEnvironments();
-  res.json({ environmentCount: environments.length, connectedClients: mcpSessions.size });
+  const clients = [...mcpSessions.values()].map(s => ({ ...(s.clientInfo ?? {}), connectedAt: s.connectedAt, toolCalls: s.toolCalls }));
+  res.json({ environmentCount: environments.length, connectedClients: mcpSessions.size, clients });
 });
 
 // MCP SSE
 const mcpSessions = new Map();
 app.get('/mcp/sse', async (_req, res) => {
   const transport = new SSEServerTransport('/mcp/messages', res);
-  const mcp = createMcpInstance();
-  mcpSessions.set(transport.sessionId, { mcp, transport });
-  res.on('close', () => { mcpSessions.delete(transport.sessionId); mcp.close(); });
+  const clientNum = ++clientCounter;
+  const session = { mcp: null, transport, clientNum, clientInfo: null, connectedAt: Date.now(), toolCalls: 0 };
+  const mcp = createMcpInstance(sessionId => {
+    const s = mcpSessions.get(sessionId);
+    if (s) { s.toolCalls++; return clientLabel(s); }
+    return null;
+  });
+  session.mcp = mcp;
+  mcpSessions.set(transport.sessionId, session);
+  mcpLogSystem({ client: `Client #${clientNum}`, preview: 'connected via SSE' });
+  mcp.server.oninitialized = () => {
+    const version = mcp.server.getClientVersion() ?? null;
+    const caps = mcp.server.getClientCapabilities() ?? null;
+    session.clientInfo = { version, caps };
+    mcpLogSystem({ client: clientLabel(session), preview: 'initialized' });
+  };
+  res.on('close', () => {
+    mcpLogSystem({ client: clientLabel(session), preview: 'disconnected' });
+    mcpSessions.delete(transport.sessionId);
+    mcp.close();
+  });
   await mcp.connect(transport);
 });
 app.post('/mcp/messages', async (req, res) => {

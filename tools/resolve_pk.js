@@ -71,7 +71,7 @@ export const tool = {
             out += `  ${f}: ${itemResult.resultList[0][i] ?? 'null'}\n`;
           }
         } else {
-          out += '\n(Item not found — may have been deleted)\n';
+          out += '\n(Item not found - may have been deleted)\n';
         }
       } catch (e) {
         out += `\n(Could not fetch item details: ${e.message})\n`;

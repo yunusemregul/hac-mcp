@@ -56,7 +56,7 @@ export const tool = {
       resultList = [...resultList].sort((a, b) => score(a) - score(b) || a[1].localeCompare(b[1]));
     }
 
-    let out = `**${env.name}** — ${resultCount} CronJob(s) in ${executionTime}ms\n\n`;
+    let out = `**${env.name}** - ${resultCount} CronJob(s) in ${executionTime}ms\n\n`;
     if (resultList?.length) {
       out += 'pk,code,type,status,result,startTime,endTime\n';
       const csvCell = c => {

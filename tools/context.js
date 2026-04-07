@@ -1,6 +1,7 @@
 // Shared runtime context injected into every tool registration.
 // server.js creates one instance and passes it to each tool's register().
 
+import { AsyncLocalStorage } from 'async_hooks';
 import { login, SessionExpiredError } from '../hac.js';
 import { getEnvironment, listEnvironments } from '../storage.js';
 import { getIndex, invalidateIndex, fuzzySearch } from '../type-index.js';
@@ -43,12 +44,19 @@ async function withSession(env, fn) {
 // ─── MCP activity log ─────────────────────────────────────────────────────────
 const logClients = new Set();
 const mcpLogBuffer = [];
+const callCtx = new AsyncLocalStorage();
 
 function broadcastLog(entry) {
-  mcpLogBuffer.push(entry);
+  const ctx = callCtx.getStore();
+  const enriched = ctx ? { ...entry, client: ctx.client } : entry;
+  mcpLogBuffer.push(enriched);
   if (mcpLogBuffer.length > 50) mcpLogBuffer.shift();
-  const data = `data: ${JSON.stringify(entry)}\n\n`;
+  const data = `data: ${JSON.stringify(enriched)}\n\n`;
   for (const res of logClients) res.write(data);
+}
+
+function mcpLogSystem({ client, preview, detail = '' }) {
+  broadcastLog({ id: null, tool: null, client, preview, detail, status: 'system', ts: Date.now() });
 }
 
 function mcpLogStart({ tool, envName, preview }) {
@@ -59,7 +67,7 @@ function mcpLogStart({ tool, envName, preview }) {
 
 function mcpLog({ tool, envName, preview, detail = '', isError = false, runId = null }) {
   broadcastLog({ id: runId, tool, envName, preview, detail, isError, status: 'done', ts: Date.now() });
-  console.error(`[MCP] ${tool}${envName ? ' / ' + envName : ''} — ${preview}`);
+  console.error(`[MCP] ${tool}${envName ? ' / ' + envName : ''} - ${preview}`);
 }
 
 function attachLogClient(res) { logClients.add(res); }
@@ -80,6 +88,7 @@ function text(t) { return { content: [{ type: 'text', text: t }] }; }
 function error(msg) { return { content: [{ type: 'text', text: `**Error:** ${msg}` }], isError: true }; }
 
 export {
+  callCtx,
   isTruthy,
   getSession,
   withSession,
@@ -92,6 +101,7 @@ export {
   attachLogClient,
   detachLogClient,
   getMcpLogBuffer,
+  mcpLogSystem,
   text,
   error,
 };

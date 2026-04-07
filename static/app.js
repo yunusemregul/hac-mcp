@@ -1,3 +1,22 @@
+// ─── Global tooltip ───────────────────────────────────────────────────────────
+const _gtt = document.getElementById('globalTooltip');
+document.addEventListener('mouseover', e => {
+  const el = e.target.closest('[data-tooltip]');
+  if (!el) { _gtt.style.opacity = '0'; return; }
+  _gtt.textContent = el.dataset.tooltip;
+  _gtt.style.opacity = '1';
+});
+document.addEventListener('mousemove', e => {
+  if (_gtt.style.opacity !== '1') return;
+  const w = _gtt.offsetWidth, pad = 8;
+  const x = Math.min(Math.max(e.clientX - w / 2, pad), window.innerWidth - w - pad);
+  _gtt.style.left = x + 'px';
+  _gtt.style.top  = (e.clientY - _gtt.offsetHeight - 10) + 'px';
+});
+document.addEventListener('mouseout', e => {
+  if (!e.relatedTarget?.closest('[data-tooltip]')) _gtt.style.opacity = '0';
+});
+
 // ─── Theme ────────────────────────────────────────────────────────────────────
 const MOON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
 const SUN  = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
@@ -91,9 +110,19 @@ function closeModal(e) { if (e.target === document.getElementById('modalOverlay'
 
 if (!localStorage.getItem('hac-mcp-onboarded')) showModal();
 
+function timeAgo(ms) {
+  const s = Math.floor((Date.now() - ms) / 1000);
+  if (s < 60) return 'just now';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
 async function pollStatus() {
   try {
-    const { environmentCount, connectedClients } = await fetch('/api/status').then(r => r.json());
+    const { environmentCount, connectedClients, clients } = await fetch('/api/status').then(r => r.json());
     document.getElementById('pillEnvsLabel').textContent =
       environmentCount === 1 ? '1 environment' : `${environmentCount} environments`;
     document.getElementById('pillClientsLabel').textContent =
@@ -102,6 +131,40 @@ async function pollStatus() {
     document.getElementById('pillEnvs').className = `status-pill ${environmentCount > 0 ? 'active' : ''}`;
     document.getElementById('pillClients').className = `status-pill ${connectedClients > 0 ? 'active' : ''}`;
     document.getElementById('infoSetup').style.display = connectedClients > 0 ? 'none' : '';
+    const clientList = document.getElementById('clientList');
+    if (clients && clients.length > 0) {
+      clientList.style.display = 'flex';
+      clientList.innerHTML = clients.map((c, i) => {
+        const num = `<span class="client-num">Client #${i + 1}</span>`;
+        if (!c?.version) {
+          const since = c?.connectedAt ? `<span class="client-since">Connected ${timeAgo(c.connectedAt)}</span>` : '';
+          const calls = c?.toolCalls > 0 ? `<span class="client-calls" data-tooltip="Number of tool calls made by this client since connecting">${c.toolCalls} call${c.toolCalls !== 1 ? 's' : ''}</span>` : '';
+          return `<div class="client-card">
+            <div class="client-card-meta">${num}${since}</div>
+            <div class="client-card-header"><span class="client-name" style="color:var(--text3)">Client connected but information could not be gathered. Try restarting the client.</span></div>
+            ${calls ? `<div class="client-caps">${calls}</div>` : ''}
+          </div>`;
+        }
+        const v = c.version;
+        const desc = v.description ? `<div class="client-desc">${v.description}</div>` : '';
+        const link = v.websiteUrl ? `<a class="client-link" href="${v.websiteUrl}" target="_blank" rel="noopener">${v.websiteUrl}</a>` : '';
+        const since = c.connectedAt ? `<span class="client-since">Connected ${timeAgo(c.connectedAt)}</span>` : '';
+        const calls = c.toolCalls > 0 ? `<span class="client-calls" data-tooltip="Number of tool calls made by this client since connecting">${c.toolCalls} call${c.toolCalls !== 1 ? 's' : ''}</span>` : '';
+        return `<div class="client-card">
+          <div class="client-card-meta">${num}${since}</div>
+          <div class="client-card-header">
+            <span class="client-name">${v.title || v.name}</span>
+            <span class="client-version">v${v.version}</span>
+          </div>
+          ${desc}
+          ${link}
+          ${calls ? `<div class="client-caps">${calls}</div>` : ''}
+        </div>`;
+      }).join('');
+    } else {
+      clientList.style.display = 'none';
+      clientList.innerHTML = '';
+    }
   } catch {}
 }
 pollStatus();
@@ -121,9 +184,14 @@ async function load() {
 
 function connBadge(id) {
   const s = connStatus[id] || 'unknown';
-  const labels = { unknown: '—', testing: 'Testing…', ok: 'Connected', err: 'Failed' };
-  const title = s === 'err' ? ` title="${esc(connError[id] || '')}"` : '';
-  return `<span class="conn-status ${s}"${title}><span class="conn-dot"></span>${labels[s]}</span>`;
+  const labels = { unknown: 'Unknown', testing: 'Testing…', ok: 'Connected', err: 'Failed' };
+  const tooltips = {
+    unknown: 'Connection not yet tested',
+    testing: 'Testing connection to this environment',
+    ok: 'Successfully authenticated with HAC',
+    err: connError[id] || 'Failed to connect to this environment',
+  };
+  return `<span class="conn-status ${s}" data-tooltip="${esc(tooltips[s])}" style="cursor:help;user-select:none"><span class="conn-dot"></span>${labels[s]}</span>`;
 }
 
 function render() {
@@ -141,12 +209,12 @@ function render() {
         <div class="env-url">${esc(e.url)}</div>
         ${e.description ? `<div class="env-desc">${esc(e.description)}</div>` : ''}
         <div class="env-badges">
-          ${e.dbType ? `<span class="badge db"><svg width="9" height="9" viewBox="0 0 9 9" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;margin-right:3px;margin-top:-1px"><ellipse cx="4.5" cy="2" rx="3.5" ry="1.3" stroke="currentColor" stroke-width="1"/><path d="M1 2v5c0 .72 1.57 1.3 3.5 1.3S8 7.72 8 7V2" stroke="currentColor" stroke-width="1"/><path d="M1 4.5c0 .72 1.57 1.3 3.5 1.3S8 5.22 8 4.5" stroke="currentColor" stroke-width="1"/></svg>${esc(e.dbType)}</span>` : ''}
-          <span class="badge ${e.allowFlexSearch ? 'on':'off'}">FLEX ${e.allowFlexSearch ? 'ON':'OFF'}</span>
-          <span class="badge ${e.allowImpexImport ? 'on':'off'}">IMPEX ${e.allowImpexImport ? 'ON':'OFF'}</span>
-          <span class="badge ${e.allowGroovyExecution ? 'on':'off'}">GROOVY ${e.allowGroovyExecution ? 'ON':'OFF'}</span>
-          <span class="badge ${e.allowGroovyCommitMode !== false ? 'on':'off'}">COMMIT ${e.allowGroovyCommitMode !== false ? 'ON':'OFF'}</span>
-          <span class="badge ${e.allowReadProperty !== false ? 'on':'off'}">PROPS ${e.allowReadProperty !== false ? 'ON':'OFF'}</span>
+          ${e.dbType ? `<span class="badge db" data-tooltip="Database type used by this environment" style="cursor:help;user-select:none"><svg width="9" height="9" viewBox="0 0 9 9" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;margin-right:3px;margin-top:-1px"><ellipse cx="4.5" cy="2" rx="3.5" ry="1.3" stroke="currentColor" stroke-width="1"/><path d="M1 2v5c0 .72 1.57 1.3 3.5 1.3S8 7.72 8 7V2" stroke="currentColor" stroke-width="1"/><path d="M1 4.5c0 .72 1.57 1.3 3.5 1.3S8 5.22 8 4.5" stroke="currentColor" stroke-width="1"/></svg>${esc(e.dbType)}</span>` : ''}
+          <span class="badge ${e.allowFlexSearch ? 'on':'off'}" data-tooltip="FlexibleSearch queries ${e.allowFlexSearch ? 'are allowed' : 'are disabled'} on this environment" style="cursor:help;user-select:none">FLEX ${e.allowFlexSearch ? 'ON':'OFF'}</span>
+          <span class="badge ${e.allowImpexImport ? 'on':'off'}" data-tooltip="ImpEx import ${e.allowImpexImport ? 'is allowed' : 'is disabled'} on this environment" style="cursor:help;user-select:none">IMPEX ${e.allowImpexImport ? 'ON':'OFF'}</span>
+          <span class="badge ${e.allowGroovyExecution ? 'on':'off'}" data-tooltip="Groovy script execution ${e.allowGroovyExecution ? 'is allowed' : 'is disabled'} on this environment" style="cursor:help;user-select:none">GROOVY ${e.allowGroovyExecution ? 'ON':'OFF'}</span>
+          <span class="badge ${e.allowGroovyCommitMode !== false ? 'on':'off'}" data-tooltip="Groovy commit mode ${e.allowGroovyCommitMode !== false ? 'is allowed' : 'is disabled'} - when enabled scripts can persist database changes" style="cursor:help;user-select:none">COMMIT ${e.allowGroovyCommitMode !== false ? 'ON':'OFF'}</span>
+          <span class="badge ${e.allowReadProperty !== false ? 'on':'off'}" data-tooltip="Reading HAC properties ${e.allowReadProperty !== false ? 'is allowed' : 'is disabled'} on this environment" style="cursor:help;user-select:none">PROPS ${e.allowReadProperty !== false ? 'ON':'OFF'}</span>
         </div>
       </div>
       <div class="env-actions">
@@ -237,11 +305,11 @@ function scheduleUrlTest() {
       } else {
         el.className = 'url-status err';
         const msg = data.error || '';
-        const friendly = msg.includes('ENOTFOUND') ? '✗ Host not found — check the URL'
-          : msg.includes('ECONNREFUSED') ? '✗ Connection refused — server may be down'
+        const friendly = msg.includes('ENOTFOUND') ? '✗ Host not found - check the URL'
+          : msg.includes('ECONNREFUSED') ? '✗ Connection refused - server may be down'
           : msg.includes('ETIMEDOUT') || msg.includes('ESOCKETTIMEDOUT') ? '✗ Connection timed out'
           : msg.includes('ECONNRESET') ? '✗ Connection reset by server'
-          : msg.includes('certificate') || msg.includes('SSL') || msg.includes('TLS') ? '✗ SSL/TLS error — try http:// instead'
+          : msg.includes('certificate') || msg.includes('SSL') || msg.includes('TLS') ? '✗ SSL/TLS error - try http:// instead'
           : '✗ Could not reach server';
         el.textContent = friendly;
       }
@@ -411,40 +479,59 @@ function appendLogEntry(entry) {
   const empty = list.querySelector('.empty');
   if (empty) empty.remove();
 
+  const time = new Date(entry.ts).toLocaleTimeString();
+  const domId = 'log-' + entry.ts + '-' + Math.random().toString(36).slice(2);
+  const item = document.createElement('div');
+
+  if (entry.status === 'system') {
+    item.className = 'log-entry log-system';
+    item.id = domId;
+    item.innerHTML = `
+      <div class="log-summary log-summary-system">
+        <span class="log-sys-dot"></span>
+        <span class="log-client">${esc(entry.client || '?')}</span>
+        <span class="log-preview">${esc(entry.preview || '')}</span>
+        <span class="log-time">${time}</span>
+      </div>
+    `;
+    list.insertBefore(item, list.firstChild);
+    const items = list.querySelectorAll('.log-entry');
+    if (items.length > 50) items[items.length - 1].remove();
+    return;
+  }
+
   const isRunning = entry.status === 'running';
   const meta = TOOL_META[entry.tool] || { label: entry.tool?.toUpperCase() ?? '?', cls: 'list' };
   const isErr = entry.isError;
   const toolCls = isErr ? 'err' : meta.cls;
   const toolLabel = isErr ? 'ERR' : meta.label;
-
   const envName = entry.envName ? esc(entry.envName) : '';
   const preview = esc(entry.preview || '');
-  const time = new Date(entry.ts).toLocaleTimeString();
+  const client = entry.client ? esc(entry.client) : '';
 
   // If this is a completion event for a running entry, update it in place
   if (!isRunning && entry.id && runningEntries.has(entry.id)) {
     const domId = runningEntries.get(entry.id);
     runningEntries.delete(entry.id);
-    const item = document.getElementById(domId);
-    if (item) {
-      item.classList.remove('running');
-      if (isErr) item.classList.add('error');
-      item.querySelector('.log-tool').className = `log-tool ${toolCls}`;
-      item.querySelector('.log-tool').textContent = toolLabel;
-      item.querySelector('.log-preview').textContent = entry.preview || '';
-      item.querySelector('.log-time').textContent = time;
-      item.querySelector('.log-detail pre').textContent = entry.detail || '';
+    const existing = document.getElementById(domId);
+    if (existing) {
+      existing.classList.remove('running');
+      if (isErr) existing.classList.add('error');
+      existing.querySelector('.log-tool').className = `log-tool ${toolCls}`;
+      existing.querySelector('.log-tool').textContent = toolLabel;
+      existing.querySelector('.log-preview').textContent = entry.preview || '';
+      existing.querySelector('.log-time').textContent = time;
+      existing.querySelector('.log-detail pre').textContent = entry.detail || '';
       return;
     }
   }
 
-  const domId = 'log-' + entry.ts + '-' + Math.random().toString(36).slice(2);
-  const item = document.createElement('div');
   item.className = 'log-entry' + (isRunning ? ' running' : '') + (isErr ? ' error' : '');
   item.id = domId;
   item.innerHTML = `
     <div class="log-summary" onclick="toggleLog('${domId}')">
       <span class="log-chevron">▶</span>
+      ${client ? `<span class="log-client">${client}</span>` : ''}
       <span class="log-tool ${toolCls}">${toolLabel}</span>
       ${envName ? `<span class="log-env">${envName}</span>` : ''}
       <span class="log-preview">${preview}</span>
@@ -455,8 +542,7 @@ function appendLogEntry(entry) {
 
   if (isRunning && entry.id) runningEntries.set(entry.id, domId);
 
-  list.insertBefore(item, list.firstChild); // newest on top
-  // Keep at most 50 entries
+  list.insertBefore(item, list.firstChild);
   const items = list.querySelectorAll('.log-entry');
   if (items.length > 50) items[items.length - 1].remove();
 }
@@ -474,7 +560,7 @@ es.onmessage = e => appendLogEntry(JSON.parse(e.data));
 const scenarios = [
   {
     name: 'Production',
-    desc: 'Live environment — never run Groovy with commit here',
+    desc: 'Live environment - never run Groovy with commit here',
     url:  'https://commerce.example.com:9002',
   },
   {
@@ -484,17 +570,17 @@ const scenarios = [
   },
   {
     name: 'Staging S1',
-    desc: 'S1 staging — shared with QA, handle ImpEx with care',
+    desc: 'S1 staging - shared with QA, handle ImpEx with care',
     url:  'https://staging.example.com:9002',
   },
   {
     name: 'QA Environment',
-    desc: 'QA instance — owned by the testing team, ask before importing',
+    desc: 'QA instance - owned by the testing team, ask before importing',
     url:  'https://qa.commerce.internal:9002',
   },
   {
     name: 'Pre-production',
-    desc: 'Pre-prod mirror — always validate here before pushing live',
+    desc: 'Pre-prod mirror - always validate here before pushing live',
     url:  'https://preprod.example.com:9002',
   },
 ];

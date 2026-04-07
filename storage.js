@@ -1,6 +1,6 @@
 import { readFile, writeFile, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
-import { randomUUID } from 'crypto';
+import { randomBytes } from 'crypto';
 import { join } from 'path';
 import { homedir } from 'os';
 
@@ -31,7 +31,9 @@ export async function getEnvironment(id) {
 
 export async function createEnvironment(data) {
   const envs = await load();
-  const env = { id: randomUUID(), ...data };
+  let id;
+  do { id = randomBytes(4).toString('hex'); } while (envs.some(e => e.id === id));
+  const env = { id, ...data };
   envs.push(env);
   await save(envs);
   return env;
