@@ -20,7 +20,9 @@ function parseFlexSearchError(msg) {
 
 function parseUnknownTypeError(msg) {
   if (!msg) return null;
-  const m = msg.match(/unknown type[:\s]+'?(\w+)'?/i) || msg.match(/[Tt]he type '(\w+)' is unknown/);
+  const m = msg.match(/unknown type[:\s]+'?(\w+)'?/i)
+    || msg.match(/[Tt]he type '(\w+)' is unknown/)
+    || msg.match(/type code '(\w+)' invalid/i);
   return m?.[1] ?? null;
 }
 
@@ -124,7 +126,7 @@ export const tool = {
         let detail = `Unknown type "${unknownType}".`;
         try {
           const types = await getTypeIndex(env);
-          const suggestions = fuzzySearch(unknownType, types, { topN: 5 });
+          const suggestions = fuzzySearch(unknownType, types, { topN: 10 });
           if (suggestions.length) detail += ` Did you mean: ${suggestions.join(', ')}?`;
         } catch (_) {}
         mcpLog({ tool: TOOL, envName: env.name, preview: 'Query error', detail, isError: true, runId });
