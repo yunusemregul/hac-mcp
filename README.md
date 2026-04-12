@@ -1,5 +1,10 @@
 # hac-mcp
 
+[![npm version](https://img.shields.io/npm/v/hac-mcp.svg)](https://www.npmjs.com/package/hac-mcp)
+[![npm downloads](https://img.shields.io/npm/dm/hac-mcp.svg)](https://www.npmjs.com/package/hac-mcp)
+[![License](https://img.shields.io/badge/License-MIT--Commons--Clause-yellow.svg)](https://github.com/yunusemregul/hac-mcp/blob/master/LICENSE)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](https://nodejs.org/)
+
 A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that provides AI assistants (like Claude) with programmatic access to SAP Commerce Cloud's **Hybris Administration Console (HAC)**. It enables automated FlexibleSearch queries, ImpEx imports, Groovy script execution, and system administration tasks across multiple environments.
 
 It authenticates with HAC using your existing credentials, no backend changes or additional setup required. Permitted operations are configured per environment, so the AI can only do what you explicitly allow.
