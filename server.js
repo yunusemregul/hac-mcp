@@ -6,12 +6,56 @@ import { homedir } from 'os';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// Load config (HAC_MEDIA_HOST_URL/TOKEN, PORT, …) from project-root .env if present.
+// Existing process env wins, so explicit exports still override the file.
+{
+  const envPath = join(__dirname, '.env');
+  if (existsSync(envPath)) {
+    process.loadEnvFile(envPath);
+    const keys = readFileSync(envPath, 'utf8').split('\n')
+      .map(l => l.trim()).filter(l => l && !l.startsWith('#'))
+      .map(l => l.split('=')[0].trim()).filter(Boolean);
+    console.error(`[MCP] Loaded .env (${keys.length} var${keys.length === 1 ? '' : 's'}: ${keys.join(', ')})`);
+  } else {
+    console.error('[MCP] No .env file found, using process environment only');
+  }
+}
+
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
-import { flexibleSearch, setHacLogger } from './hac.js';
-import { listEnvironments, getEnvironment, createEnvironment, updateEnvironment, deleteEnvironment } from './storage.js';
+import { flexibleSearch, setHacLogger, setHttpTimeout, getHttpTimeout } from './hac.js';
+import { listEnvironments, getEnvironment, createEnvironment, updateEnvironment, deleteEnvironment, getSettings, updateSettings } from './storage.js';
 import { getIndex } from './type-index.js';
 import { registerAllTools, tools as allTools } from './tools/index.js';
 import { getSession, withSession, attachLogClient, detachLogClient, getMcpLogBuffer, mcpLogSystem } from './tools/context.js';
+import { readdir, stat } from 'fs/promises';
+import { existsSync, readFileSync } from 'fs';
+
+async function dirSize(path) {
+  let total = 0, files = 0;
+  try {
+    const entries = await readdir(path, { withFileTypes: true });
+    for (const e of entries) {
+      const full = join(path, e.name);
+      if (e.isDirectory()) {
+        const sub = await dirSize(full);
+        total += sub.total; files += sub.files;
+      } else if (e.isFile()) {
+        const s = await stat(full);
+        total += s.size; files += 1;
+      }
+    }
+  } catch (_) {}
+  return { total, files };
+}
+
+function humanSize(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  let v = bytes / 1024, i = 0;
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+  return `${v.toFixed(v >= 100 ? 0 : v >= 10 ? 1 : 2)} ${units[i]}`;
+}
 
 const PORT = process.env.PORT || 18432;
 
@@ -27,7 +71,7 @@ setHacLogger(entry => {
 
 // ─── MCP server factory ───────────────────────────────────────────────────────
 function createMcpInstance(getClientLabel) {
-  const mcp = new McpServer({ name: 'hac-mcp', version: '1.0.0' }, { timeout: 60000 });
+  const mcp = new McpServer({ name: 'hac-mcp', version: '1.0.0' }, { timeout: getHttpTimeout() });
   registerAllTools(mcp, getClientLabel);
   return mcp;
 }
@@ -90,6 +134,18 @@ app.post('/token', (_req, res) => {
     token_type: 'bearer',
     expires_in: 86400,
   });
+});
+
+// Settings API
+app.get('/api/settings', async (_req, res) => res.json(await getSettings()));
+app.put('/api/settings', async (req, res) => {
+  try {
+    const settings = await updateSettings(req.body);
+    setHttpTimeout(settings.httpTimeoutMs);
+    res.json(settings);
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
 });
 
 // Environments API
@@ -196,6 +252,43 @@ app.get('/api/status', async (_req, res) => {
   res.json({ environmentCount: environments.length, connectedClients: mcpSessions.size, clients });
 });
 
+// ─── media-host proxy (for the UI dashboard) ─────────────────────────────────
+// Token lives server-side only; the browser never sees it.
+const MEDIA_HOST_URL = (process.env.HAC_MEDIA_HOST_URL || '').replace(/\/+$/, '');
+const MEDIA_HOST_TOKEN = process.env.HAC_MEDIA_HOST_TOKEN || '';
+const mediaHostAuth = { Authorization: `Bearer ${MEDIA_HOST_TOKEN}` };
+
+app.get('/api/media-host/status', async (_req, res) => {
+  if (!MEDIA_HOST_URL || !MEDIA_HOST_TOKEN) return res.json({ configured: false });
+  try {
+    const [health, listing] = await Promise.all([
+      fetch(`${MEDIA_HOST_URL}/health`).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(`${MEDIA_HOST_URL}/files`, { headers: mediaHostAuth }).then(r => r.ok ? r.json() : null).catch(() => null),
+    ]);
+    res.json({
+      configured: true,
+      url: MEDIA_HOST_URL,
+      online: !!health,
+      ttlHours: health?.ttlHours ?? listing?.ttlHours ?? null,
+      count: listing?.count ?? 0,
+      totalBytes: listing?.totalBytes ?? 0,
+      files: listing?.files ?? [],
+    });
+  } catch (e) {
+    res.json({ configured: true, url: MEDIA_HOST_URL, online: false, error: e.message, files: [] });
+  }
+});
+
+app.delete('/api/media-host/files/:id', async (req, res) => {
+  if (!MEDIA_HOST_URL || !MEDIA_HOST_TOKEN) return res.status(400).json({ error: 'media-host not configured' });
+  try {
+    const r = await fetch(`${MEDIA_HOST_URL}/f/${encodeURIComponent(req.params.id)}`, { method: 'DELETE', headers: mediaHostAuth });
+    res.status(r.status).json(await r.json().catch(() => ({})));
+  } catch (e) {
+    res.status(502).json({ error: e.message });
+  }
+});
+
 // MCP SSE
 const mcpSessions = new Map();
 app.get('/mcp/sse', async (_req, res) => {
@@ -229,8 +322,11 @@ app.post('/mcp/messages', async (req, res) => {
   else res.status(400).send('Unknown session');
 });
 
+// Apply persisted settings before accepting requests
+setHttpTimeout((await getSettings()).httpTimeoutMs);
+
 // ─── Start ────────────────────────────────────────────────────────────────────
-createServer(app).listen(PORT, () => {
+createServer(app).listen(PORT, async () => {
   const base = `http://localhost:${PORT}`;
   const hasColor = process.stdout.hasColors?.() ?? process.stdout.isTTY;
   const c = hasColor ? {
@@ -256,6 +352,17 @@ createServer(app).listen(PORT, () => {
   console.log('');
   console.log(`  ${label('Open the Web UI to add and manage your HAC environments.')}`);
   console.log('');
+
+  const kinds = ['groovy', 'impex', 'flexsearch'];
+  const sizes = await Promise.all(kinds.map(k => dirSize(join(__dirname, 'logs', k))));
+  if (sizes.some(s => s.files > 0)) {
+    console.log(`  ${heading('Logs')}`);
+    for (let i = 0; i < kinds.length; i++) {
+      const { total, files } = sizes[i];
+      console.log(`  ${label(kinds[i].padEnd(12))}  ${value(`${humanSize(total)} (${files} file${files === 1 ? '' : 's'})`)}`);
+    }
+    console.log('');
+  }
   console.log(`  ${heading('Claude Code')}`);
   console.log(`  ${label('Run this command to register:')}`);
   console.log('');

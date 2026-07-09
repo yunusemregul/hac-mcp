@@ -100,6 +100,43 @@ async function showManifest() {
 function closeManifest() { document.getElementById('manifestOverlay').classList.remove('visible'); }
 function closeManifestModal(e) { if (e.target === document.getElementById('manifestOverlay')) closeManifest(); }
 
+// ─── Settings modal ───────────────────────────────────────────────────────────
+async function showSettings() {
+  document.getElementById('settingsOverlay').classList.add('visible');
+  document.getElementById('errTimeout').textContent = '';
+  try {
+    const s = await fetch('/api/settings').then(r => r.json());
+    document.getElementById('fTimeout').value = Math.round((s.httpTimeoutMs ?? 60000) / 1000);
+  } catch {}
+}
+function closeSettings() { document.getElementById('settingsOverlay').classList.remove('visible'); }
+function closeSettingsModal(e) { if (e.target === document.getElementById('settingsOverlay')) closeSettings(); }
+
+async function saveSettings() {
+  const err = document.getElementById('errTimeout');
+  err.textContent = '';
+  const secs = Number(document.getElementById('fTimeout').value);
+  if (!Number.isFinite(secs) || secs < 1 || secs > 600) {
+    err.textContent = 'Enter a value between 1 and 600 seconds.';
+    return;
+  }
+  const btn = document.getElementById('btnSaveSettings');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ httpTimeoutMs: Math.round(secs * 1000) }),
+    });
+    if (res.ok) { toast('Settings saved', 'ok'); closeSettings(); }
+    else { const e = await res.json().catch(() => ({})); err.textContent = e.error || 'Error saving'; }
+  } catch (e) {
+    err.textContent = 'Error saving';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 // ─── Onboarding modal ─────────────────────────────────────────────────────────
 function showModal() { document.getElementById('modalOverlay').classList.add('visible'); }
 function dismissModal() {
@@ -169,6 +206,69 @@ async function pollStatus() {
 }
 pollStatus();
 setInterval(pollStatus, 5000);
+
+// ─── Media host dashboard ─────────────────────────────────────────────────────
+function mhBytes(b) {
+  if (b == null) return '0 B';
+  if (b < 1024) return `${b} B`;
+  const u = ['KB', 'MB', 'GB', 'TB']; let v = b / 1024, i = 0;
+  while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+  return `${v.toFixed(v >= 10 ? 0 : 1)} ${u[i]}`;
+}
+
+async function loadMediaHost() {
+  const card = document.getElementById('mediaHostCard');
+  let s;
+  try { s = await fetch('/api/media-host/status').then(r => r.json()); } catch { return; }
+  // Only show the card when a media host is actually configured.
+  if (!s || !s.configured) { card.style.display = 'none'; return; }
+  card.style.display = '';
+
+  document.getElementById('mhDot').className = `status-dot ${s.online ? 'active' : 'inactive'}`;
+  const host = String(s.url || '').replace(/^https?:\/\//, '');
+  const ttl = s.ttlHours ? `${s.ttlHours}h auto-delete` : 'no expiry';
+  document.getElementById('mhMeta').innerHTML =
+    `<div class="mh-headline">` +
+      `<span class="${s.online ? 'mh-ok' : 'mh-down'}">${s.online ? '● online' : '● offline'}</span>` +
+      `<a class="mh-host" href="${esc(s.url)}" target="_blank" rel="noopener">${esc(host)}</a>` +
+    `</div>` +
+    `<div class="mh-sub">${s.count} file${s.count !== 1 ? 's' : ''} · ${mhBytes(s.totalBytes)} · ${ttl}</div>`;
+
+  const files = s.files || [];
+  const list = document.getElementById('mhFiles');
+  if (!s.online) { list.innerHTML = `<div class="empty" style="padding:14px">Host unreachable${s.error ? ` (${esc(s.error)})` : ''}.</div>`; return; }
+  if (!files.length) { list.innerHTML = `<div class="empty" style="padding:14px">No hosted files.</div>`; return; }
+  list.innerHTML = files.map(f => `
+    <div class="mh-file">
+      <a class="mh-file-main" href="${esc(f.url)}" target="_blank" rel="noopener" title="Open ${esc(f.name)} in a new tab">
+        <span class="mh-file-name">${esc(f.name)}</span>
+        <span class="mh-file-meta">${mhBytes(f.size)} · added ${timeAgo(f.createdAt)}</span>
+      </a>
+      <div class="mh-file-actions">
+        <button class="copy-btn mh-copy" data-url="${esc(f.url)}" onclick="copyMediaUrl(this)">Copy URL</button>
+        <button class="btn-ghost btn-sm mh-del" title="Delete" onclick="deleteMedia('${esc(f.id)}', this)">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+async function copyMediaUrl(btn) {
+  await navigator.clipboard.writeText(btn.dataset.url);
+  const old = btn.textContent;
+  btn.textContent = 'Copied!';
+  setTimeout(() => btn.textContent = old, 1500);
+}
+
+async function deleteMedia(id, btn) {
+  btn.disabled = true;
+  try {
+    const r = await fetch(`/api/media-host/files/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (r.ok) { toast('Deleted', 'ok'); loadMediaHost(); }
+    else { const e = await r.json().catch(() => ({})); toast(e.error || 'Delete failed', 'err'); btn.disabled = false; }
+  } catch (e) { toast('Delete failed', 'err'); btn.disabled = false; }
+}
+
+loadMediaHost();
+setInterval(loadMediaHost, 10000);
 
 // ─── Environment management ───────────────────────────────────────────────────
 let envs = [];
@@ -255,7 +355,6 @@ function openForm(id) {
   const e = id ? envs.find(x => x.id === id) : null;
   document.getElementById('formOverlay').classList.add('visible');
   if (!e) typewriter.start(); else typewriter.stop();
-  updateSaveBtn();
   document.getElementById('formTitle').textContent = e ? 'Edit Environment' : 'Add Environment';
   document.getElementById('editId').value = e?.id ?? '';
   document.getElementById('fName').value = e?.name ?? '';
@@ -270,6 +369,7 @@ function openForm(id) {
   toggleGroovyCommit(document.getElementById('fGroovy').checked);
   document.getElementById('fReadProperty').checked = e ? e.allowReadProperty !== false : true;
   document.getElementById('fDbType').value = e?.dbType ?? 'MSSQL';
+  updateSaveBtn();
 }
 
 // ─── Auto URL test ────────────────────────────────────────────────────────────
@@ -380,6 +480,12 @@ function updateSaveBtn() {
   });
 });
 
+['fDesc','fFlex','fImpex','fGroovy','fGroovyCommit','fReadProperty','fDbType'].forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener('change', updateSaveBtn);
+  el.addEventListener('input', updateSaveBtn);
+});
+
 async function saveEnv() {
   const id = document.getElementById('editId').value;
   const name     = document.getElementById('fName').value.trim();
@@ -469,6 +575,8 @@ const TOOL_META = {
   flexible_search: { label: 'FLEX',   cls: 'flex' },
   impex_import:    { label: 'IMPEX',  cls: 'impex' },
   list_environments: { label: 'LIST', cls: 'list' },
+  upload_to_vps:   { label: 'UPLOAD', cls: 'list' },
+  delete_from_vps: { label: 'DELETE', cls: 'impex' },
 };
 
 
@@ -554,7 +662,12 @@ function toggleLog(id) {
 const es = new EventSource('/api/mcp-log');
 es.onopen = () => document.getElementById('logDot').classList.add('connected');
 es.onerror = () => document.getElementById('logDot').classList.remove('connected');
-es.onmessage = e => appendLogEntry(JSON.parse(e.data));
+es.onmessage = e => {
+  const entry = JSON.parse(e.data);
+  appendLogEntry(entry);
+  // Immediately refresh the media list when an upload completes.
+  if (entry.tool === 'upload_to_vps' && entry.status === 'done') loadMediaHost();
+};
 
 // ─── Typewriter placeholders ──────────────────────────────────────────────────
 const scenarios = [

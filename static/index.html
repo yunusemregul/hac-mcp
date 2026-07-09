@@ -14,6 +14,9 @@
   </div>
   <div style="display:flex;align-items:center;gap:8px">
   <button class="btn-theme" id="btnTheme" onclick="toggleTheme()" title="Toggle theme"></button>
+  <button class="btn-theme" id="btnSettings" onclick="showSettings()" title="Settings">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+  </button>
   <button class="btn-manifest" onclick="showManifest()">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
     View Tools Manifest
@@ -54,8 +57,9 @@
     </div>
   </div>
 
-  <!-- Status card -->
-  <div class="card" id="infoCard" style="align-self:start">
+  <!-- Right column -->
+  <div style="display:flex;flex-direction:column;gap:20px;align-self:start">
+  <div class="card" id="infoCard">
     <div class="card-header">
       <h2>Status</h2>
     </div>
@@ -80,6 +84,19 @@
         </div>
       </div>
     </div>
+  </div>
+
+  <!-- Media Host card -->
+  <div class="card" id="mediaHostCard" style="display:none">
+    <div class="card-header">
+      <h2><span class="status-dot inactive" id="mhDot"></span>Media Host</h2>
+      <button class="btn-ghost btn-sm" onclick="loadMediaHost()">Refresh</button>
+    </div>
+    <div class="card-body" style="padding:16px 18px;display:flex;flex-direction:column;gap:12px">
+      <div id="mhMeta" class="mh-meta"></div>
+      <div id="mhFiles" class="mh-files"></div>
+    </div>
+  </div>
   </div>
 </div>
 
@@ -189,6 +206,24 @@
     </div>
 
     <button class="modal-dismiss" onclick="dismissModal()">Got it, don't show again</button>
+  </div>
+</div>
+
+<!-- Settings modal -->
+<div class="modal-overlay" id="settingsOverlay" onclick="closeSettingsModal(event)">
+  <div class="modal modal-form">
+    <button class="modal-close" onclick="closeSettings()">✕</button>
+    <div class="modal-header">
+      <div class="modal-logo">Settings</div>
+    </div>
+    <label>Request Timeout (seconds)</label>
+    <input type="number" id="fTimeout" min="1" max="600" step="1" placeholder="60"/>
+    <div class="step-desc" style="margin-top:6px">Max time to wait for a single HAC request (Groovy, FlexSearch, ImpEx…) before aborting. Range: 1–600s.</div>
+    <div class="field-error" id="errTimeout"></div>
+    <div class="form-actions">
+      <button class="btn-ghost" onclick="closeSettings()">Cancel</button>
+      <button class="btn-primary" id="btnSaveSettings" onclick="saveSettings()">Save</button>
+    </div>
   </div>
 </div>
 

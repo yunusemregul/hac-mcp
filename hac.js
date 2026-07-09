@@ -36,7 +36,12 @@ function getAgent(hostname) {
   return agentCache[hostname];
 }
 
-const HTTP_TIMEOUT_MS = 60_000;
+let HTTP_TIMEOUT_MS = 60_000;
+export function setHttpTimeout(ms) {
+  const v = Number(ms);
+  if (Number.isFinite(v) && v >= 1000) HTTP_TIMEOUT_MS = Math.round(v);
+}
+export function getHttpTimeout() { return HTTP_TIMEOUT_MS; }
 
 function httpRequest(options, body = null) {
   return new Promise((resolve, reject) => {

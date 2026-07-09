@@ -6,6 +6,9 @@ import { homedir } from 'os';
 
 const DATA_DIR = join(homedir(), '.hac-mcp');
 const FILE = join(DATA_DIR, 'environments.json');
+const SETTINGS_FILE = join(DATA_DIR, 'settings.json');
+
+const DEFAULT_SETTINGS = { httpTimeoutMs: 60_000 };
 
 async function ensureDataDir() {
   await mkdir(DATA_DIR, { recursive: true });
@@ -51,4 +54,28 @@ export async function updateEnvironment(id, data) {
 export async function deleteEnvironment(id) {
   const envs = await load();
   await save(envs.filter(e => e.id !== id));
+}
+
+export async function getSettings() {
+  if (!existsSync(SETTINGS_FILE)) return { ...DEFAULT_SETTINGS };
+  try {
+    return { ...DEFAULT_SETTINGS, ...JSON.parse(await readFile(SETTINGS_FILE, 'utf8')) };
+  } catch {
+    return { ...DEFAULT_SETTINGS };
+  }
+}
+
+export async function updateSettings(data) {
+  const current = await getSettings();
+  const next = { ...current };
+  if (data.httpTimeoutMs != null) {
+    const ms = Number(data.httpTimeoutMs);
+    if (!Number.isFinite(ms) || ms < 1000 || ms > 600_000) {
+      throw new Error('httpTimeoutMs must be between 1000 and 600000');
+    }
+    next.httpTimeoutMs = Math.round(ms);
+  }
+  await ensureDataDir();
+  await writeFile(SETTINGS_FILE, JSON.stringify(next, null, 2));
+  return next;
 }
