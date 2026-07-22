@@ -75,11 +75,15 @@
           <div class="copyable"><code class="info-code" id="infoEndpoint"></code><button class="copy-btn" onclick="copyEl('infoEndpoint')">Copy</button></div>
         </div>
         <div style="margin-bottom:12px">
+          <div class="info-label">Codex</div>
+          <div class="copyable"><code class="info-code" id="infoCodexCmd"></code><button class="copy-btn" onclick="copyEl('infoCodexCmd')">Copy</button></div>
+        </div>
+        <div style="margin-bottom:12px">
           <div class="info-label">Claude Code</div>
           <div class="copyable"><code class="info-code" id="infoClaudeCmd"></code><button class="copy-btn" onclick="copyEl('infoClaudeCmd')">Copy</button></div>
         </div>
         <div>
-          <div class="info-label">Other MCP Clients</div>
+          <div class="info-label">Other MCP Clients (Streamable HTTP)</div>
           <div class="copyable"><pre class="info-pre" id="infoJson"></pre><button class="copy-btn" onclick="copyEl('infoJson')">Copy</button></div>
         </div>
       </div>
@@ -188,9 +192,11 @@
         <div class="step-num">2</div>
         <div class="step-body">
           <div class="step-title">Connect your MCP client</div>
-          <div class="step-desc">Run this in your terminal to register with Claude Code:</div>
+          <div class="step-desc">Register with Codex (Streamable HTTP):</div>
+          <code class="modal-code" id="modalCodexCmd"></code>
+          <div class="step-desc" style="margin-top:12px">Or register with Claude Code (legacy SSE):</div>
           <code class="modal-code" id="modalClaudeCmd"></code>
-          <div class="step-desc" style="margin-top:12px">Or add this to your MCP client config:</div>
+          <div class="step-desc" style="margin-top:12px">For other Streamable HTTP clients:</div>
           <pre class="modal-pre" id="modalJson"></pre>
         </div>
       </div>

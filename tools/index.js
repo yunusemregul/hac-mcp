@@ -12,6 +12,8 @@ import { tool as mediaRead } from './media_read.js';
 import { tool as mediaWrite } from './media_write.js';
 import { tool as runCronjob } from './run_cronjob.js';
 import { tool as listCronjobs } from './list_cronjobs.js';
+import { tool as backofficeConfigRaw } from './backoffice_config_raw.js';
+import { tool as backofficeConfigResolve } from './backoffice_config_resolve.js';
 
 const tools = [
   listEnvironments,
@@ -26,6 +28,8 @@ const tools = [
   mediaWrite,
   runCronjob,
   listCronjobs,
+  backofficeConfigRaw,
+  backofficeConfigResolve,
 ];
 
 export { tools };

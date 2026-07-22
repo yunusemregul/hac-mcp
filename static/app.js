@@ -32,8 +32,10 @@ function toggleTheme() {
 applyTheme(localStorage.getItem('hac-mcp-theme') || 'dark');
 
 // ─── endpoint label + info card ───────────────────────────────────────────────
-const mcpEndpoint = location.origin + '/mcp/sse';
-const claudeCmd = `claude mcp add --transport sse hac-mcp ${mcpEndpoint}`;
+const mcpEndpoint = location.origin + '/mcp';
+const sseEndpoint = location.origin + '/mcp/sse';
+const codexCmd = `codex mcp add hac-mcp --url ${mcpEndpoint}`;
+const claudeCmd = `claude mcp add --transport sse hac-mcp ${sseEndpoint}`;
 const configJson =
 `{
   "mcpServers": {
@@ -44,8 +46,10 @@ const configJson =
 }`;
 
 document.getElementById('infoEndpoint').textContent = mcpEndpoint;
+document.getElementById('infoCodexCmd').textContent = codexCmd;
 document.getElementById('infoClaudeCmd').textContent = claudeCmd;
 document.getElementById('infoJson').textContent = configJson;
+document.getElementById('modalCodexCmd').textContent = codexCmd;
 document.getElementById('modalClaudeCmd').textContent = claudeCmd;
 document.getElementById('modalJson').textContent = configJson;
 
@@ -172,7 +176,7 @@ async function pollStatus() {
     if (clients && clients.length > 0) {
       clientList.style.display = 'flex';
       clientList.innerHTML = clients.map((c, i) => {
-        const num = `<span class="client-num">Client #${i + 1}</span>`;
+        const num = `<span class="client-num">Client #${c.clientNum ?? i + 1}</span>`;
         if (!c?.version) {
           const since = c?.connectedAt ? `<span class="client-since">Connected ${timeAgo(c.connectedAt)}</span>` : '';
           const calls = c?.toolCalls > 0 ? `<span class="client-calls" data-tooltip="Number of tool calls made by this client since connecting">${c.toolCalls} call${c.toolCalls !== 1 ? 's' : ''}</span>` : '';

@@ -3,6 +3,7 @@ import { flexibleSearch, impexImport } from '../hac.js';
 import { optionalLooseBool, optionalLooseNumber } from './zodLoose.js';
 import { withSession, getEnvironment, mcpLogStart, mcpLog, text, error } from './context.js';
 import { fetchScalarFields } from './flexible_search.js';
+import { logScriptRun } from './fileLog.js';
 
 const TOOL = 'impex_import';
 
@@ -138,6 +139,7 @@ export const tool = {
     if (validationWarnings.length) {
       const warnOut = `**Pre-validation warnings** (import not executed):\n${validationWarnings.map(w => `- ${w}`).join('\n')}\n\nFix the script and retry.`;
       mcpLog({ tool: TOOL, envName: env.name, preview: 'Pre-validation failed', detail: warnOut, isError: true, runId });
+      logScriptRun({ kind: 'impex', envName: env.name, script, result: warnOut, isError: true });
       return error(warnOut);
     }
 
@@ -148,10 +150,14 @@ export const tool = {
       }));
     } catch (e) {
       mcpLog({ tool: TOOL, envName: env.name, preview: `Error: ${e.message}`, detail: e.stack || '', isError: true, runId });
+      logScriptRun({ kind: 'impex', envName: env.name, script, result: `Error: ${e.message}\n${e.stack || ''}`, isError: true });
       return error(e.message);
     }
 
     const isErr = result.level === 'error';
+    logScriptRun({ kind: 'impex', envName: env.name, script,
+      result: `Result: ${result.result ?? ''}\n${result.details ?? ''}`,
+      isError: isErr });
     const icon = isErr ? '❌' : '✅';
     let out = `**${env.name}** - ${icon} ${result.result || 'Import complete'}\n`;
     if (result.details) out += `\n\`\`\`\n${formatImpexDetails(result.details)}\n\`\`\``;

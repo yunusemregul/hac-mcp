@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { flexibleSearch } from '../hac.js';
 import { withSession, getEnvironment, getTypeIndex, fuzzySearch, isTruthy, mcpLogStart, mcpLog, text, error } from './context.js';
 import { optionalLooseNumber } from './zodLoose.js';
+import { logScriptRun } from './fileLog.js';
 
 const TOOL = 'flexible_search';
 
@@ -90,6 +91,7 @@ export const tool = {
     if (rowLimitMatch) {
       const msg = `Do not use row-limiting clauses (LIMIT, TOP, ROWNUM, FETCH FIRST, ROWS ONLY) in FlexibleSearch queries - use the maxCount parameter to limit rows instead.`;
       mcpLog({ tool: TOOL, envName: env.name, preview: 'Query error', detail: msg, isError: true, runId });
+      logScriptRun({ kind: 'flexsearch', envName: env.name, script: query, result: msg, isError: true });
       return error(`Query error: ${msg}`);
     }
 
@@ -98,6 +100,7 @@ export const tool = {
       result = await withSession(env, s => flexibleSearch(s, query, { maxCount, locale, dataSource }));
     } catch (e) {
       mcpLog({ tool: TOOL, envName: env.name, preview: `Error: ${e.message}`, detail: e.stack || '', isError: true, runId });
+      logScriptRun({ kind: 'flexsearch', envName: env.name, script: query, result: `Error: ${e.message}\n${e.stack || ''}`, isError: true });
       return error(e.message);
     }
 
@@ -135,6 +138,7 @@ export const tool = {
 
 
       mcpLog({ tool: TOOL, envName: env.name, preview: 'Query error', detail: rawDetail, isError: true, runId });
+      logScriptRun({ kind: 'flexsearch', envName: env.name, script: query, result: rawDetail, isError: true });
       return error(`Query error: ${rawDetail}`);
     }
 
@@ -158,6 +162,8 @@ export const tool = {
       detail: `Query: ${query}\n\nResult:\n${out}`,
       runId,
     });
+    logScriptRun({ kind: 'flexsearch', envName: env.name, script: query,
+      result: `${resultCount} row(s) in ${executionTime}ms\n\n${out}`, isError: false });
     return text(out);
   },
 };

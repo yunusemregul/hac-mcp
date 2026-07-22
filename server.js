@@ -3,7 +3,10 @@ import { createServer } from 'http';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { homedir } from 'os';
+import { randomUUID } from 'crypto';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -248,8 +251,17 @@ app.get('/api/manifest', (_req, res) => {
 // Status API
 app.get('/api/status', async (_req, res) => {
   const environments = await listEnvironments();
-  const clients = [...mcpSessions.values()].map(s => ({ ...(s.clientInfo ?? {}), connectedAt: s.connectedAt, toolCalls: s.toolCalls }));
-  res.json({ environmentCount: environments.length, connectedClients: mcpSessions.size, clients });
+  const sessions = [
+    ...mcpSessions.values(),
+    ...httpMcpSessions.values().filter(isHttpSessionActive),
+  ];
+  const clients = sessions.map(s => ({
+    ...(s.clientInfo ?? {}),
+    clientNum: s.clientNum,
+    connectedAt: s.connectedAt,
+    toolCalls: s.toolCalls,
+  }));
+  res.json({ environmentCount: environments.length, connectedClients: sessions.length, clients });
 });
 
 // ─── media-host proxy (for the UI dashboard) ─────────────────────────────────
@@ -289,7 +301,93 @@ app.delete('/api/media-host/files/:id', async (req, res) => {
   }
 });
 
-// MCP SSE
+// MCP Streamable HTTP (Codex and other current MCP clients)
+const httpMcpSessions = new Map();
+const HTTP_ACTIVITY_GRACE_MS = 30_000;
+const HTTP_SESSION_MAX_IDLE_MS = 24 * 60 * 60 * 1000;
+
+// Streamable HTTP sessions can outlive their network connection. In particular,
+// clients are not required to send DELETE when their process exits, so keeping a
+// session in the map does not mean that the client is still connected.
+function isHttpSessionActive(session, now = Date.now()) {
+  if (session.activeStreams > 0) return true;
+  return !session.hasOpenedStream && now - session.lastSeenAt < HTTP_ACTIVITY_GRACE_MS;
+}
+
+// Keep dormant sessions around long enough for a client to reconnect, but do
+// not retain abandoned transports forever.
+const httpSessionReaper = setInterval(() => {
+  const cutoff = Date.now() - HTTP_SESSION_MAX_IDLE_MS;
+  for (const session of httpMcpSessions.values()) {
+    if (session.activeStreams === 0 && session.lastSeenAt < cutoff) {
+      void session.mcp.close().catch(e => console.error('[MCP HTTP] session cleanup error:', e));
+    }
+  }
+}, 60_000);
+httpSessionReaper.unref();
+
+app.all('/mcp', async (req, res) => {
+  try {
+    const sessionId = req.headers['mcp-session-id'];
+    let session = sessionId ? httpMcpSessions.get(sessionId) : null;
+    if (!session && !sessionId && req.method === 'POST' && isInitializeRequest(req.body)) {
+      const clientNum = ++clientCounter;
+      const now = Date.now();
+      session = {
+        mcp: null,
+        transport: null,
+        clientNum,
+        clientInfo: null,
+        connectedAt: now,
+        lastSeenAt: now,
+        activeStreams: 0,
+        hasOpenedStream: false,
+        toolCalls: 0,
+      };
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => randomUUID(),
+        onsessioninitialized: id => {
+          httpMcpSessions.set(id, session);
+          mcpLogSystem({ client: `Client #${clientNum}`, preview: 'connected via Streamable HTTP' });
+        },
+      });
+      const mcp = createMcpInstance(id => {
+        const s = httpMcpSessions.get(id) ?? session;
+        if (s) { s.toolCalls++; return clientLabel(s); }
+        return null;
+      });
+      session.mcp = mcp;
+      session.transport = transport;
+      mcp.server.oninitialized = () => {
+        const version = mcp.server.getClientVersion() ?? null;
+        const caps = mcp.server.getClientCapabilities() ?? null;
+        session.clientInfo = { version, caps };
+        mcpLogSystem({ client: clientLabel(session), preview: 'initialized' });
+      };
+      transport.onclose = () => {
+        const id = transport.sessionId;
+        mcpLogSystem({ client: clientLabel(session), preview: 'disconnected' });
+        if (id) httpMcpSessions.delete(id);
+      };
+      await mcp.connect(transport);
+    }
+    if (!session) {
+      return res.status(400).json({ jsonrpc: '2.0', error: { code: -32000, message: 'Bad Request: No valid MCP session ID' }, id: null });
+    }
+    session.lastSeenAt = Date.now();
+    if (req.method === 'GET') {
+      session.hasOpenedStream = true;
+      session.activeStreams++;
+      res.once('close', () => { session.activeStreams = Math.max(0, session.activeStreams - 1); });
+    }
+    await session.transport.handleRequest(req, res, req.body);
+  } catch (e) {
+    console.error('[MCP HTTP] error:', e);
+    if (!res.headersSent) res.status(500).json({ jsonrpc: '2.0', error: { code: -32603, message: 'Internal server error' }, id: null });
+  }
+});
+
+// MCP legacy SSE (kept for Claude and existing clients)
 const mcpSessions = new Map();
 app.get('/mcp/sse', async (_req, res) => {
   const transport = new SSEServerTransport('/mcp/messages', res);
@@ -347,7 +445,8 @@ createServer(app).listen(PORT, async () => {
   console.log(`  ${c.bold}${c.green}HAC MCP is running${c.reset}`);
   console.log('');
   console.log(`  ${label('Web UI      ')}  ${value(base)}`);
-  console.log(`  ${label('MCP endpoint')}  ${value(`${base}/mcp/sse`)}`);
+  console.log(`  ${label('MCP HTTP    ')}  ${value(`${base}/mcp`)}`);
+  console.log(`  ${label('MCP SSE     ')}  ${value(`${base}/mcp/sse`)}`);
   console.log(`  ${label('Config file ')}  ${value(join(homedir(), '.hac-mcp', 'environments.json'))}`);
   console.log('');
   console.log(`  ${label('Open the Web UI to add and manage your HAC environments.')}`);
@@ -363,7 +462,12 @@ createServer(app).listen(PORT, async () => {
     }
     console.log('');
   }
-  console.log(`  ${heading('Claude Code')}`);
+  console.log(`  ${heading('Codex')}`);
+  console.log(`  ${label('Run this command to register:')}`);
+  console.log('');
+  console.log(`  ${code(`codex mcp add hac-mcp --url ${base}/mcp`)}`);
+  console.log('');
+  console.log(`  ${heading('Claude Code (legacy SSE)')}`);
   console.log(`  ${label('Run this command to register:')}`);
   console.log('');
   console.log(`  ${code(`claude mcp add --transport sse hac-mcp ${base}/mcp/sse`)}`);
@@ -374,7 +478,7 @@ createServer(app).listen(PORT, async () => {
   console.log(`  ${code('{')}`);
   console.log(`  ${code('  "mcpServers": {')}`);
   console.log(`  ${code('    "hac-mcp": {')}`);
-  console.log(`  ${code(`      "url": "${base}/mcp/sse"`)}`);
+  console.log(`  ${code(`      "url": "${base}/mcp"`)}`);
   console.log(`  ${code('    }')}`);
   console.log(`  ${code('  }')}`);
   console.log(`  ${code('}')}`);

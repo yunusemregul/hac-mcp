@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { groovyExecute } from '../hac.js';
 import { optionalLooseBool } from './zodLoose.js';
 import { withSession, getEnvironment, mcpLogStart, mcpLog, text, error } from './context.js';
+import { logScriptRun } from './fileLog.js';
 
 const TOOL = 'groovy_execute';
 
@@ -41,10 +42,14 @@ export const tool = {
       result = await withSession(env, s => groovyExecute(s, script, { commit }));
     } catch (e) {
       mcpLog({ tool: TOOL, envName: env.name, preview: `Error: ${e.message}`, detail: e.stack || '', isError: true, runId });
+      logScriptRun({ kind: 'groovy', envName: env.name, script, result: `Error: ${e.message}\n${e.stack || ''}`, isError: true });
       return error(e.message);
     }
 
     const isErr = !!result.stacktraceText;
+    logScriptRun({ kind: 'groovy', envName: env.name, script,
+      result: `Result: ${result.executionResult ?? ''}\nOutput: ${result.outputText ?? ''}\n${result.stacktraceText ? 'Stacktrace:\n' + result.stacktraceText : ''}`,
+      isError: isErr });
     let out = `**${env.name}** - ${isErr ? '❌ Error' : '✅ Success'}\n`;
     if (result.executionResult != null) out += `\n**Result:**\n\`\`\`\n${result.executionResult}\n\`\`\``;
     if (result.outputText) out += `\n**Output:**\n\`\`\`\n${result.outputText}\n\`\`\``;

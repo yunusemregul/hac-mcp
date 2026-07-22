@@ -16,7 +16,7 @@ export const tool = {
     const lines = envs.map(e =>
       `- **${e.name}** (id: \`${e.id}\`)\n` +
       `  ${e.description || 'No description'}\n` +
-      `  DB: ${e.dbType || 'unknown'}  FlexSearch: ${e.allowFlexSearch ? '✅' : '❌'}  ImpEx Import: ${e.allowImpexImport ? '✅' : '❌'}  Groovy: ${e.allowGroovyExecution ? '✅' : '❌'}  Read Property: ${e.allowReadProperty !== false ? '✅' : '❌'}`
+      `  DB: ${e.dbType || 'unknown'}  FlexSearch: ${e.allowFlexSearch ? '✅' : '❌'}  ImpEx Import: ${e.allowImpexImport ? '✅' : '❌'}  Groovy: ${e.allowGroovyExecution ? '✅' : '❌'}  Groovy Commit: ${e.allowGroovyExecution && e.allowGroovyCommitMode !== false ? '✅' : '❌'}  Read Property: ${e.allowReadProperty !== false ? '✅' : '❌'}`
     );
     const out = `## HAC Environments\n\n${lines.join('\n\n')}`;
     mcpLog({ tool: TOOL, envName: '', preview: `${envs.length} environment(s)`, detail: out, runId });

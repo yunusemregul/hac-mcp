@@ -12,8 +12,15 @@ def mediaService = spring.getBean('mediaService')
 def modelService = spring.getBean('modelService')
 
 def media = modelService.get(PK.fromLong(${pk}L))
-if (media.mime && media.mime != 'text/plain') {
-  throw new RuntimeException("media_read only supports text/plain media, but this media has mime: \${media.mime}")
+def mime = media.mime ?: ''
+def isText = mime.startsWith('text/') ||
+             mime == 'application/json' ||
+             mime == 'application/xml' ||
+             mime.endsWith('+xml') ||
+             mime.endsWith('+json') ||
+             mime == ''
+if (!isText) {
+  throw new RuntimeException("media_read only supports text-like media (text/*, application/json, application/xml, *+xml, *+json), but this media has mime: \${media.mime}")
 }
 def stream = mediaService.getStreamFromMedia(media)
 def bytes = stream.bytes
@@ -43,7 +50,7 @@ function decodeTextBytes(bytes) {
 export const tool = {
   name: TOOL,
   category: 'read',
-  description: 'Read the text content of a SAP Commerce MediaModel by its PK. Only supports text/plain media.',
+  description: 'Read the text content of a SAP Commerce MediaModel by its PK. Supports text-like mimes: text/*, application/json, application/xml, *+xml, *+json.',
   inputSchema: {
     environmentId: z.string().describe('Environment ID from list_environments'),
     mediaPk: z.string().describe('PK of the MediaModel to read'),

@@ -46,6 +46,8 @@ It authenticates with HAC using your existing credentials, no backend changes or
 | `media_write` | Create or overwrite media models |
 | `list_cronjobs` | List CronJobs with optional filtering |
 | `run_cronjob` | Execute a CronJob synchronously and wait for completion |
+| `backoffice_config_raw` | Read RAW Backoffice cockpit-config `<context>` blocks (any component), filter by type/component/module; no merge |
+| `backoffice_config_resolve` | Resolve the MERGED editor-area for a type (walks supertype chain, applies merge/replace/remove), tags each node with its `module@type` contributor |
 
 ## Installation
 
@@ -110,7 +112,32 @@ Open `http://localhost:18432/` in your browser, click **+ Add Environment**, fil
 
 > **Tip for production:** Disable `allowImpexImport`, `allowGroovyCommitMode`, or both to prevent accidental data modifications.
 
-## Using with Claude
+## Using with Codex
+
+Codex uses the Streamable HTTP endpoint:
+
+```bash
+codex mcp add hac-mcp --url http://localhost:18432/mcp
+```
+
+Or add it directly to `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.hac-mcp]
+url = "http://localhost:18432/mcp"
+```
+
+## Using with Claude Code
+
+Claude Code can continue using the legacy SSE endpoint:
+
+```bash
+claude mcp add --transport sse hac-mcp http://localhost:18432/mcp/sse
+```
+
+## Other MCP clients
+
+For clients that support Streamable HTTP, use:
 
 Add the following to your MCP client configuration:
 
@@ -118,7 +145,7 @@ Add the following to your MCP client configuration:
 {
   "mcpServers": {
     "hac-mcp": {
-      "url": "http://localhost:18432/mcp/sse"
+      "url": "http://localhost:18432/mcp"
     }
   }
 }

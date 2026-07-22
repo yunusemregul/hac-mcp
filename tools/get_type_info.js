@@ -76,7 +76,7 @@ export const tool = {
     for (const typePK of typePKs) {
       try {
         const attrResult = await withSession(env, s => flexibleSearch(s,
-          `SELECT {qualifier}, {databasecolumn}, {enclosingtype}, {attributetype}, {unique} FROM {AttributeDescriptor} WHERE {enclosingtype} = '${typePK}' ORDER BY {qualifier} ASC`,
+          `SELECT {qualifier}, {databasecolumn}, {enclosingtype}, {attributetype}, {unique}, {modifiers} FROM {AttributeDescriptor} WHERE {enclosingtype} = '${typePK}' ORDER BY {qualifier} ASC`,
           { maxCount: 300 }
         ));
         if (attrResult.resultList) {
@@ -97,6 +97,9 @@ export const tool = {
 
     const scalar = allAttrs.filter(([, dbCol]) => dbCol);
     const relations = allAttrs.filter(([, dbCol]) => !dbCol);
+
+    // SAP Commerce AttributeDescriptor modifiers bitmask: LOCALIZED = 1 << 9 (512).
+    const isLocalizedMod = mods => (parseInt(mods, 10) & 512) === 512;
 
     const collTypePKs = [...new Set(relations.map(([,,,attrTypePK]) => attrTypePK).filter(Boolean))];
     const elementTypeMap = {};
@@ -155,30 +158,32 @@ export const tool = {
     out += '\n\n';
 
     out += `Scalar fields - use directly in SELECT / WHERE / ORDER BY:\n`;
-    for (const [q, , encPK, attrTypePK, isUnique] of scalar) {
+    for (const [q, , encPK, attrTypePK, isUnique, mods] of scalar) {
       const inherited = includeInherited && ancestorNames[String(encPK)] && ancestorNames[String(encPK)] !== code
         ? ` (from ${ancestorNames[String(encPK)]})` : '';
       const refType = attrTypePK ? scalarRefTypes[String(attrTypePK)] : null;
       let line = `  ${q}`;
       if (isTruthy(isUnique)) line += ' [unique]';
+      if (isLocalizedMod(mods)) line += ' [localized]';
       if (refType) line += ` → ${refType}`;
       if (inherited) line += inherited;
       out += line + '\n';
     }
 
     out += '\nRelation/collection fields - require JOIN to query:\n';
-    for (const [q,,encPK] of relations) {
+    for (const [q,,encPK,,,mods] of relations) {
       const { targetType, linkTable } = relationInfo[q] || {};
       const inherited = includeInherited && ancestorNames[String(encPK)] && ancestorNames[String(encPK)] !== code ? ` (from ${ancestorNames[String(encPK)]})` : '';
+      const loc = isLocalizedMod(mods) ? ' [localized]' : '';
       if (targetType && linkTable) {
         const alias = code.charAt(0).toLowerCase();
         const tAlias = targetType.charAt(0).toLowerCase() + '2';
-        out += `  ${q}${inherited}: Collection<${targetType}>\n`;
+        out += `  ${q}${loc}${inherited}: Collection<${targetType}>\n`;
         out += `    JOIN: {${code} AS ${alias} JOIN ${linkTable} AS lnk ON {lnk:source}={${alias}:pk} JOIN ${targetType} AS ${tAlias} ON {lnk:target}={${tAlias}:pk}}\n`;
       } else if (targetType) {
-        out += `  ${q}${inherited}: Collection<${targetType}>\n`;
+        out += `  ${q}${loc}${inherited}: Collection<${targetType}>\n`;
       } else {
-        out += `  ${q}${inherited}\n`;
+        out += `  ${q}${loc}${inherited}\n`;
       }
     }
 
