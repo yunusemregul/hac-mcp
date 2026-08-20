@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { mkdir, writeFile } from 'fs/promises';
+import { dirname, resolve } from 'path';
 import { flexibleSearch } from '../hac.js';
 import { withSession, getEnvironment, getTypeIndex, fuzzySearch, isTruthy, mcpLogStart, mcpLog, text, error } from './context.js';
 import { optionalLooseNumber } from './zodLoose.js';
@@ -65,15 +67,16 @@ export async function fetchScalarFields(env, typeCode) {
 export const tool = {
   name: TOOL,
   category: 'read',
-  description: 'Execute a FlexibleSearch query on a HAC environment. Call list_environments first to get valid IDs. IMPORTANT: The database is MSSQL - do NOT use LIMIT, TOP, or OFFSET in queries; use the maxCount parameter to limit rows instead.',
+  description: 'Execute a FlexibleSearch query on a HAC environment. Call list_environments first to get valid IDs. IMPORTANT: The database is MSSQL - do NOT use LIMIT, TOP, or OFFSET in queries; use the maxCount parameter to limit rows instead. If path is given, results are written as CSV to that file on disk instead of being returned in the response - use this for large result sets to avoid flooding the conversation.',
   inputSchema: {
     environmentId: z.string().describe('Environment ID from list_environments'),
     query: z.string().describe('FlexibleSearch query, e.g. SELECT {pk}, {uid} FROM {User}'),
     maxCount: optionalLooseNumber().describe('Max rows to return (default 200)'),
     locale: z.string().optional().describe('Locale (default en)'),
     dataSource: z.string().optional().describe('Data source (default master)'),
+    path: z.string().optional().describe('If provided, writes the result as CSV to this file path on disk instead of returning it in the response. Relative paths resolve against the hac-mcp server working directory - prefer absolute paths. The response then only contains a short confirmation, not the data.'),
   },
-  handler: async ({ environmentId, query, maxCount, locale, dataSource }) => {
+  handler: async ({ environmentId, query, maxCount, locale, dataSource, path }) => {
     const env = await getEnvironment(environmentId);
     if (!env) {
       mcpLog({ tool: TOOL, envName: environmentId, preview: 'Unknown environment', isError: true });
@@ -143,19 +146,35 @@ export const tool = {
     }
 
     const { headers, resultList, resultCount, executionTime } = result;
-    let out = `**${env.name}** - ${resultCount} row(s) in ${executionTime}ms\n\n`;
-
+    let csv = '';
     if (resultList?.length) {
       const csvCell = c => {
         if (c === null) return '';
         const s = String(c);
         return (s.includes(',') || s.includes('"') || s.includes('\n')) ? `"${s.replace(/"/g, '""')}"` : s;
       };
-      out += (headers || []).map(csvCell).join(',') + '\n';
-      for (const row of resultList) out += row.map(csvCell).join(',') + '\n';
-    } else {
-      out += 'No results.\n';
+      csv += (headers || []).map(csvCell).join(',') + '\n';
+      for (const row of resultList) csv += row.map(csvCell).join(',') + '\n';
     }
+
+    if (path) {
+      const resolvedPath = resolve(path);
+      try {
+        await mkdir(dirname(resolvedPath), { recursive: true });
+        await writeFile(resolvedPath, csv, 'utf8');
+      } catch (e) {
+        mcpLog({ tool: TOOL, envName: env.name, preview: `Write error: ${e.message}`, isError: true, runId });
+        return error(`Failed to write result to "${resolvedPath}": ${e.message}`);
+      }
+
+      const summary = `**${env.name}** - ${resultCount} row(s) in ${executionTime}ms - saved to ${resolvedPath}`;
+      mcpLog({ tool: TOOL, envName: env.name, preview: `${resultCount} row(s) in ${executionTime}ms - saved to ${resolvedPath}`, runId });
+      logScriptRun({ kind: 'flexsearch', envName: env.name, script: query,
+        result: `${resultCount} row(s) in ${executionTime}ms - saved to ${resolvedPath}`, isError: false });
+      return text(summary);
+    }
+
+    const out = `**${env.name}** - ${resultCount} row(s) in ${executionTime}ms\n\n${csv || 'No results.\n'}`;
 
     mcpLog({ tool: TOOL, envName: env.name,
       preview: `${resultCount} row(s) in ${executionTime}ms - ${preview}`,
