@@ -20,6 +20,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px}
 h1{font-size:1.3rem;font-weight:700;color:var(--accent);margin-bottom:4px}
 .subtitle{font-size:.8rem;color:var(--text3)}
+.version-badge{font-size:.62rem;font-weight:700;padding:2px 7px;border-radius:4px;letter-spacing:.04em;vertical-align:middle;margin-left:4px;background:var(--accent-bg);color:var(--accent);border:1px solid var(--accent-border)}
 .subtitle code{background:var(--surface);padding:2px 6px;border-radius:4px;color:var(--text2);font-size:.75rem}
 
 .layout{display:grid;grid-template-columns:1fr 320px;gap:20px;align-items:start}
@@ -280,3 +281,23 @@ input.input-err:focus{border-color:#ef4444}
 .toast.err{background:#2d0a0a;color:#f87171;border:1px solid #7f1d1d}
 [data-theme=light] .toast.ok{background:#dcfce7;color:#15803d;border-color:#86efac}
 [data-theme=light] .toast.err{background:#fef2f2;color:#dc2626;border-color:#fca5a5}
+
+/* ─── Media host card ─── */
+.mh-meta{display:flex;flex-direction:column;gap:4px}
+.mh-headline{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mh-ok{color:#34d399;font-size:12px;font-weight:600}
+.mh-down{color:#f87171;font-size:12px;font-weight:600}
+.mh-host{color:var(--text2);font-size:12px;text-decoration:none;font-family:ui-monospace,monospace}
+.mh-host:hover{text-decoration:underline}
+.mh-sub{color:var(--text3);font-size:11px}
+.mh-files{display:flex;flex-direction:column;gap:6px;max-height:280px;overflow-y:auto}
+.mh-file{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 9px;background:var(--bg2);border:1px solid var(--border);border-radius:7px}
+.mh-file-main{display:flex;flex-direction:column;gap:2px;min-width:0;text-decoration:none;cursor:pointer}
+.mh-file-main:hover .mh-file-name{text-decoration:underline}
+.mh-file-name{font-size:12px;color:var(--text);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px}
+.mh-file-meta{font-size:10px;color:var(--text3)}
+.mh-file-actions{display:flex;align-items:center;gap:4px;flex-shrink:0}
+.mh-copy{font-size:10px;padding:3px 7px}
+.mh-del{color:#f87171;padding:3px 7px;line-height:1}
+.mh-del:hover{background:#2d0a0a}
+[data-theme=light] .mh-del:hover{background:#fef2f2}

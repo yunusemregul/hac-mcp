@@ -14,6 +14,8 @@ import { tool as runCronjob } from './run_cronjob.js';
 import { tool as listCronjobs } from './list_cronjobs.js';
 import { tool as backofficeConfigRaw } from './backoffice_config_raw.js';
 import { tool as backofficeConfigResolve } from './backoffice_config_resolve.js';
+import { tool as uploadToVps } from './upload_to_vps.js';
+import { tool as deleteFromVps } from './delete_from_vps.js';
 
 const tools = [
   listEnvironments,
@@ -30,6 +32,8 @@ const tools = [
   listCronjobs,
   backofficeConfigRaw,
   backofficeConfigResolve,
+  uploadToVps,
+  deleteFromVps,
 ];
 
 export { tools };

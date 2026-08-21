@@ -4,11 +4,13 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { homedir } from 'os';
 import { randomUUID } from 'crypto';
+import { createRequire } from 'module';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const { version } = createRequire(import.meta.url)('./package.json');
 
 // Load config (HAC_MEDIA_HOST_URL/TOKEN, PORT, …) from project-root .env if present.
 // Existing process env wins, so explicit exports still override the file.
@@ -74,7 +76,7 @@ setHacLogger(entry => {
 
 // ─── MCP server factory ───────────────────────────────────────────────────────
 function createMcpInstance(getClientLabel) {
-  const mcp = new McpServer({ name: 'hac-mcp', version: '1.0.0' }, { timeout: getHttpTimeout() });
+  const mcp = new McpServer({ name: 'hac-mcp', version }, { timeout: getHttpTimeout() });
   registerAllTools(mcp, getClientLabel);
   return mcp;
 }
@@ -231,7 +233,7 @@ app.get('/api/mcp-log', (req, res) => {
 app.get('/api/manifest', (_req, res) => {
   res.json({
     name: 'hac-mcp',
-    version: '1.0.0',
+    version,
     description: 'SAP Commerce Cloud HAC - MCP Server',
     tools: allTools.map(t => ({
       name: t.name,

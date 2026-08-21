@@ -170,6 +170,10 @@ hac-mcp/
     └── style.css       # Styles
 ```
 
+## Release Notes
+
+**v1.0.6** - Web UI shows the running server version next to the "HAC MCP" title and setup modal. Fixed the server previously reporting a hardcoded `1.0.0` version instead of reading `package.json` (was actually `1.0.5`).
+
 ## Security Notes
 
 - Credentials are stored in plaintext in `~/.hac-mcp/environments.json`. Avoid exposing this file.

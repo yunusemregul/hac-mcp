@@ -1,7 +1,7 @@
 {
   "name": "hac-mcp",
-  "version": "1.0.5",
-  "description": "MCP server for SAP Commerce Cloud HAC — FlexibleSearch, ImpEx, Groovy, CronJobs and more from any MCP client",
+  "version": "1.0.6",
+  "description": "MCP server for SAP Commerce Cloud HAC - FlexibleSearch, ImpEx, Groovy, CronJobs and more from any MCP client",
   "keywords": [
     "mcp",
     "model-context-protocol",

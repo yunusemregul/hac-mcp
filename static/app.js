@@ -1,3 +1,12 @@
+// ─── Version badge ─────────────────────────────────────────────────────────────
+fetch('/api/manifest').then(r => r.json()).then(m => {
+  document.title = `HAC MCP v${m.version}`;
+  for (const id of ['versionBadge', 'versionBadgeSetup']) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = `v${m.version}`;
+  }
+}).catch(() => {});
+
 // ─── Global tooltip ───────────────────────────────────────────────────────────
 const _gtt = document.getElementById('globalTooltip');
 document.addEventListener('mouseover', e => {

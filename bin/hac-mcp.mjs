@@ -5,6 +5,7 @@ import { dirname, join } from 'path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const { version } = createRequire(import.meta.url)(join(__dirname, '../package.json'));
+// Note: .env is loaded inside server.js, which covers both `npm start` and this CLI.
 
 // ─── Arg parsing ──────────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
