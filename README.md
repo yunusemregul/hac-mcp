@@ -174,6 +174,8 @@ hac-mcp/
 
 ## Release Notes
 
+**v1.0.7** - Script run logs on disk are now managed: configurable retention (default 30 days) prunes old `logs/<kind>/<date>/` folders on startup and daily, and result bodies are truncated (default 20,000 chars) before being written. The Settings modal exposes both, shows the log directory and its current size, and the activity log panel notes that runs are also saved to disk. Failed CSRF token extraction now reports it as a HAC connectivity problem (VPN down or IP not whitelisted) instead of a bare parse error.
+
 **v1.0.6** - Web UI shows the running server version next to the "HAC MCP" title and setup modal. Fixed the server previously reporting a hardcoded `1.0.0` version instead of reading `package.json` (was actually `1.0.5`).
 
 ## Security Notes
