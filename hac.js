@@ -74,6 +74,25 @@ function extractCsrf(html) {
   return m?.[1] ?? null;
 }
 
+export class HacUnreachableError extends Error {
+  constructor(msg) { super(msg); this.name = 'HacUnreachableError'; }
+}
+
+function requireCsrf(page, pageLabel, session) {
+  const csrf = extractCsrf(page.body);
+  if (csrf) return csrf;
+  const host = session?.host ?? 'HAC';
+  const target = session?.envName ? `"${session.envName}" (${host})` : host;
+  log('error', `No CSRF token on ${pageLabel} page - HAC unreachable or access blocked`, session?.envName);
+  throw new HacUnreachableError(
+    `Cannot reach HAC on ${target} - the ${pageLabel} page returned no CSRF token ` +
+    `(HTTP ${page.status}, ${page.body.length} bytes). This is a connectivity/access problem, not a query problem: ` +
+    `the request most likely never reached HAC because the VPN is disconnected or this machine's IP is not whitelisted for ${host}. ` +
+    `STOP HERE - do not retry, do not switch environments, do not try a different query. ` +
+    `Tell the user to check their VPN connection and HAC IP whitelist, then try again.`
+  );
+}
+
 function extractCookies(headers) {
   const cookies = {};
   for (const c of (headers['set-cookie'] || [])) {
@@ -126,8 +145,7 @@ export async function login(baseUrl, username, password, envName) {
   log('info', `Fetching login page - getting CSRF token + session cookie`, envName);
   const loginPage = await httpRequest(opts(proto, ctx + '/login', 'GET'));
   const cookies = extractCookies(loginPage.headers);
-  const csrf = extractCsrf(loginPage.body);
-  if (!csrf) throw new Error('Could not extract CSRF token from login page');
+  const csrf = requireCsrf(loginPage, 'login', proto);
   log('info', `Got CSRF token: ${csrf.slice(0, 16)}…`, envName);
 
   log('info', `Submitting credentials for ${username}`, envName);
@@ -170,8 +188,7 @@ export async function flexibleSearch(session, query, {
   log('info', `Fetching FlexSearch page for CSRF token`, envName);
   const flexPage = await httpRequest(opts(session, ctx + '/console/flexsearch', 'GET'));
   assertNotLoginPage(flexPage);
-  const csrf = extractCsrf(flexPage.body);
-  if (!csrf) throw new Error('Could not extract CSRF token from flexsearch page');
+  const csrf = requireCsrf(flexPage, 'flexsearch', session);
   log('info', `Got CSRF token: ${csrf.slice(0, 16)}…`, envName);
 
   log('info', `Executing query (maxCount=${maxCount}, dataSource=${dataSource}): ${query.slice(0, 80)}${query.length > 80 ? '…' : ''}`, envName);
@@ -208,8 +225,7 @@ export async function impexImport(session, scriptContent, {
   log('info', `Fetching ImpEx page for CSRF token`, envName);
   const impexPage = await httpRequest(opts(session, ctx + '/console/impex/import', 'GET'));
   assertNotLoginPage(impexPage);
-  const csrf = extractCsrf(impexPage.body);
-  if (!csrf) throw new Error('Could not extract CSRF token from impex page');
+  const csrf = requireCsrf(impexPage, 'impex', session);
   log('info', `Got CSRF token: ${csrf.slice(0, 16)}…`, envName);
 
   log('info', `Submitting ImpEx script (${scriptContent.length} chars, validation=${validationEnum}, threads=${maxThreads})`, envName);
@@ -255,8 +271,7 @@ export async function groovyExecute(session, script, { commit = false } = {}) {
   log('info', `Fetching scripting page for CSRF token`, envName);
   const page = await httpRequest(opts(session, ctx + '/console/scripting', 'GET'));
   assertNotLoginPage(page);
-  const csrf = extractCsrf(page.body);
-  if (!csrf) throw new Error('Could not extract CSRF token from scripting page');
+  const csrf = requireCsrf(page, 'scripting', session);
   log('info', `Got CSRF token: ${csrf.slice(0, 16)}…`, envName);
 
   log('info', `Executing Groovy script (${script.length} chars, commit=${commit})`, envName);
@@ -308,8 +323,7 @@ export async function pkAnalyze(session, pk) {
   log('info', `Fetching PK analyzer page for CSRF token`, envName);
   const page = await httpRequest(opts(session, ctx + '/platform/pkanalyzer', 'GET'));
   assertNotLoginPage(page);
-  const csrf = extractCsrf(page.body);
-  if (!csrf) throw new Error('Could not extract CSRF token from pkanalyzer page');
+  const csrf = requireCsrf(page, 'pkanalyzer', session);
   log('info', `Analyzing PK: ${pk}`, envName);
   const body = new URLSearchParams({ pkString: String(pk) }).toString();
   const res = await httpRequest(opts(session, ctx + '/platform/pkanalyzer/analyze', 'POST', {
