@@ -26,6 +26,7 @@ It authenticates with HAC using your existing credentials, no backend changes or
 - **Fine-grained permissions**: control which operations are allowed per environment
 - **Web UI**: browser-based management console for adding/editing environments and monitoring activity
 - **Real-time logging**: live HAC request and MCP tool execution logs via SSE
+- **Script run logs on disk**: every Groovy, ImpEx and FlexSearch run is written to `logs/<kind>/<date>/` with its script and result. Retention (default 30 days) and result truncation (default 20,000 chars) are configurable in the Web UI Settings modal
 - **Type search**: trigram-based fuzzy search for SAP Commerce type names with per-environment caching
 - **FlexSearch error recovery**: when a query fails due to an unknown field or type, valid field names are fetched and returned alongside the error so the AI can correct and retry without manual intervention
 - **ImpEx validation and enrichment**: scripts are pre-validated for missing mandatory fields before import runs, and any post-import attribute errors are resolved to valid field lists on the fly so the AI can fix and retry the script itself
@@ -162,6 +163,7 @@ hac-mcp/
 ├── tools/
 │   ├── index.js        # Tool registry
 │   ├── context.js      # Shared runtime state (sessions, logging)
+│   ├── fileLog.js      # On-disk script run logs (retention, truncation)
 │   ├── zodLoose.js     # Loose Zod validators (string -> number/bool)
 │   └── *.js            # One file per MCP tool
 └── static/

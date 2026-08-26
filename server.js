@@ -33,6 +33,7 @@ import { listEnvironments, getEnvironment, createEnvironment, updateEnvironment,
 import { getIndex } from './type-index.js';
 import { registerAllTools, tools as allTools } from './tools/index.js';
 import { getSession, withSession, attachLogClient, detachLogClient, getMcpLogBuffer, mcpLogSystem } from './tools/context.js';
+import { LOG_DIR, setLogRetentionDays, setLogMaxResultChars, pruneLogs, startLogPruner } from './tools/fileLog.js';
 import { readdir, stat } from 'fs/promises';
 import { existsSync, readFileSync } from 'fs';
 
@@ -142,11 +143,21 @@ app.post('/token', (_req, res) => {
 });
 
 // Settings API
-app.get('/api/settings', async (_req, res) => res.json(await getSettings()));
+function applySettings(settings) {
+  setHttpTimeout(settings.httpTimeoutMs);
+  setLogRetentionDays(settings.logRetentionDays);
+  setLogMaxResultChars(settings.logMaxResultChars);
+}
+
+app.get('/api/settings', async (_req, res) => {
+  const [settings, { total, files }] = await Promise.all([getSettings(), dirSize(LOG_DIR)]);
+  res.json({ ...settings, logDir: LOG_DIR, logSize: humanSize(total), logFiles: files });
+});
 app.put('/api/settings', async (req, res) => {
   try {
     const settings = await updateSettings(req.body);
-    setHttpTimeout(settings.httpTimeoutMs);
+    applySettings(settings);
+    await pruneLogs();
     res.json(settings);
   } catch (e) {
     res.status(400).json({ error: e.message });
@@ -423,7 +434,8 @@ app.post('/mcp/messages', async (req, res) => {
 });
 
 // Apply persisted settings before accepting requests
-setHttpTimeout((await getSettings()).httpTimeoutMs);
+applySettings(await getSettings());
+startLogPruner();
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 createServer(app).listen(PORT, async () => {
@@ -455,13 +467,16 @@ createServer(app).listen(PORT, async () => {
   console.log('');
 
   const kinds = ['groovy', 'impex', 'flexsearch'];
-  const sizes = await Promise.all(kinds.map(k => dirSize(join(__dirname, 'logs', k))));
+  const sizes = await Promise.all(kinds.map(k => dirSize(join(LOG_DIR, k))));
   if (sizes.some(s => s.files > 0)) {
     console.log(`  ${heading('Logs')}`);
     for (let i = 0; i < kinds.length; i++) {
       const { total, files } = sizes[i];
       console.log(`  ${label(kinds[i].padEnd(12))}  ${value(`${humanSize(total)} (${files} file${files === 1 ? '' : 's'})`)}`);
     }
+    const { logRetentionDays } = await getSettings();
+    console.log(`  ${label('stored in   ')}  ${value(LOG_DIR)}`);
+    console.log(`  ${label('retention   ')}  ${value(logRetentionDays ? `${logRetentionDays} day(s)` : 'kept forever')}`);
     console.log('');
   }
   console.log(`  ${heading('Codex')}`);

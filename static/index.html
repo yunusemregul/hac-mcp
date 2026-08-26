@@ -46,6 +46,7 @@
         <button class="btn-ghost btn-sm" onclick="clearLog('logList')">Clear</button>
       </div>
       <div id="logList" class="log-list"><div class="empty" style="padding:20px">No activity yet.</div></div>
+      <div class="log-note">Live view only. Groovy, ImpEx and FlexSearch runs - script and result - are also saved to disk; see <a href="#" onclick="showSettings();return false">Settings</a> for location and retention.</div>
     </div>
 
     <div class="card">
@@ -226,6 +227,17 @@
     <input type="number" id="fTimeout" min="1" max="600" step="1" placeholder="60"/>
     <div class="step-desc" style="margin-top:6px">Max time to wait for a single HAC request (Groovy, FlexSearch, ImpEx…) before aborting. Range: 1–600s.</div>
     <div class="field-error" id="errTimeout"></div>
+    <label style="margin-top:16px">Log Retention (days)</label>
+    <input type="number" id="fRetention" min="0" max="3650" step="1" placeholder="30"/>
+    <div class="step-desc" style="margin-top:6px">Groovy, ImpEx and FlexSearch runs are written to disk as files. Folders older than this are deleted on startup and once a day. Use <strong>0</strong> to keep them forever.</div>
+    <div class="field-error" id="errRetention"></div>
+
+    <label style="margin-top:16px">Max Logged Result Size (characters)</label>
+    <input type="number" id="fMaxResult" min="0" max="10000000" step="1000" placeholder="20000"/>
+    <div class="step-desc" style="margin-top:6px">Result bodies longer than this are truncated before being written, so large production result sets don't land on disk in full. Use <strong>0</strong> for no truncation.</div>
+    <div class="field-error" id="errMaxResult"></div>
+
+    <div class="step-desc" style="margin-top:14px" id="logDirInfo"></div>
     <div class="form-actions">
       <button class="btn-ghost" onclick="closeSettings()">Cancel</button>
       <button class="btn-primary" id="btnSaveSettings" onclick="saveSettings()">Save</button>

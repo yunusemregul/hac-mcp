@@ -116,10 +116,15 @@ function closeManifestModal(e) { if (e.target === document.getElementById('manif
 // ─── Settings modal ───────────────────────────────────────────────────────────
 async function showSettings() {
   document.getElementById('settingsOverlay').classList.add('visible');
-  document.getElementById('errTimeout').textContent = '';
+  for (const id of ['errTimeout', 'errRetention', 'errMaxResult']) document.getElementById(id).textContent = '';
   try {
     const s = await fetch('/api/settings').then(r => r.json());
     document.getElementById('fTimeout').value = Math.round((s.httpTimeoutMs ?? 60000) / 1000);
+    document.getElementById('fRetention').value = s.logRetentionDays ?? 30;
+    document.getElementById('fMaxResult').value = s.logMaxResultChars ?? 20000;
+    document.getElementById('logDirInfo').innerHTML =
+      `Logs are stored in <code>${esc(s.logDir || '')}</code>` +
+      (s.logFiles ? ` - currently ${esc(s.logSize)} in ${s.logFiles} file${s.logFiles === 1 ? '' : 's'}.` : ' - currently empty.');
   } catch {}
 }
 function closeSettings() { document.getElementById('settingsOverlay').classList.remove('visible'); }
@@ -127,10 +132,23 @@ function closeSettingsModal(e) { if (e.target === document.getElementById('setti
 
 async function saveSettings() {
   const err = document.getElementById('errTimeout');
-  err.textContent = '';
+  const errRet = document.getElementById('errRetention');
+  const errMax = document.getElementById('errMaxResult');
+  for (const el of [err, errRet, errMax]) el.textContent = '';
+
   const secs = Number(document.getElementById('fTimeout').value);
   if (!Number.isFinite(secs) || secs < 1 || secs > 600) {
     err.textContent = 'Enter a value between 1 and 600 seconds.';
+    return;
+  }
+  const days = Number(document.getElementById('fRetention').value);
+  if (!Number.isInteger(days) || days < 0 || days > 3650) {
+    errRet.textContent = 'Enter a whole number of days between 0 and 3650.';
+    return;
+  }
+  const maxChars = Number(document.getElementById('fMaxResult').value);
+  if (!Number.isInteger(maxChars) || maxChars < 0 || maxChars > 10000000) {
+    errMax.textContent = 'Enter a whole number between 0 and 10000000.';
     return;
   }
   const btn = document.getElementById('btnSaveSettings');
@@ -139,7 +157,11 @@ async function saveSettings() {
     const res = await fetch('/api/settings', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ httpTimeoutMs: Math.round(secs * 1000) }),
+      body: JSON.stringify({
+        httpTimeoutMs: Math.round(secs * 1000),
+        logRetentionDays: days,
+        logMaxResultChars: maxChars,
+      }),
     });
     if (res.ok) { toast('Settings saved', 'ok'); closeSettings(); }
     else { const e = await res.json().catch(() => ({})); err.textContent = e.error || 'Error saving'; }

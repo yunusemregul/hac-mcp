@@ -8,7 +8,7 @@ const DATA_DIR = join(homedir(), '.hac-mcp');
 const FILE = join(DATA_DIR, 'environments.json');
 const SETTINGS_FILE = join(DATA_DIR, 'settings.json');
 
-const DEFAULT_SETTINGS = { httpTimeoutMs: 60_000 };
+const DEFAULT_SETTINGS = { httpTimeoutMs: 60_000, logRetentionDays: 30, logMaxResultChars: 20_000 };
 
 async function ensureDataDir() {
   await mkdir(DATA_DIR, { recursive: true });
@@ -74,6 +74,20 @@ export async function updateSettings(data) {
       throw new Error('httpTimeoutMs must be between 1000 and 600000');
     }
     next.httpTimeoutMs = Math.round(ms);
+  }
+  if (data.logRetentionDays != null) {
+    const days = Number(data.logRetentionDays);
+    if (!Number.isInteger(days) || days < 0 || days > 3650) {
+      throw new Error('logRetentionDays must be an integer between 0 (keep forever) and 3650');
+    }
+    next.logRetentionDays = days;
+  }
+  if (data.logMaxResultChars != null) {
+    const chars = Number(data.logMaxResultChars);
+    if (!Number.isInteger(chars) || chars < 0 || chars > 10_000_000) {
+      throw new Error('logMaxResultChars must be an integer between 0 (no truncation) and 10000000');
+    }
+    next.logMaxResultChars = chars;
   }
   await ensureDataDir();
   await writeFile(SETTINGS_FILE, JSON.stringify(next, null, 2));
